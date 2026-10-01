@@ -1,0 +1,46 @@
+# Entorno de Testing contra la homologación de ARCA. Variables en .env (ver .env.example).
+services:
+  arca-facturacion:
+    build:
+      context: .
+    image: arca-facturacion:1.3.0
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      Arca__Ambiente: Homologacion
+      Arca__Cuit: ${ARCA_CUIT}
+      Arca__CertificadoPassword_FILE: /run/secrets/cert_password
+      Arca__ClaveCifradoRegistro: ${ARCA_CLAVE_CIFRADO:-}
+      # Rutas de datos en el volumen /data (ya definidas en la imagen; se repiten aquí por claridad).
+      Arca__PlantillasPath: /data/plantillas
+      Arca__ReceptoresPath: /data/receptores
+      Arca__SuscripcionesPath: /data/suscripciones
+      Seguridad__Clientes__0__Nombre: erp
+      Seguridad__Clientes__0__Claves__0: ${API_KEY_ERP}
+      Seguridad__Clientes__1__Nombre: ops
+      Seguridad__Clientes__1__Claves__0: ${API_KEY_OPS}
+      Seguridad__Clientes__1__Permisos__0: admin
+      Seguridad__Clientes__1__Permisos__1: consultar
+    secrets:
+      - cert_password
+    volumes:
+      - arca-data:/data
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    stop_grace_period: 90s
+secrets:
+  cert_password:
+    file: ./certs/password.txt
+volumes:
+  arca-data:

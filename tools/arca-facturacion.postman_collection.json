@@ -1,0 +1,1277 @@
+{
+  "info": {
+    "name": "Microservicio ARCA - Facturación 1.4",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Generada desde docs/openapi.json. Variables baseUrl y apiKey. Para REINTENTAR una emisión, fijar Idempotency-Key a mano y repetirla."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "apiKey",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Administración",
+      "item": [
+        {
+          "name": "Búsqueda paginada de emisiones por punto de venta, tipo, fechas, documento, estado o clien",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/emisiones?PtoVta=&CbteTipo=&Desde=&Hasta=&DocNro=&Estado=&Cliente=&Referencia=&Pagina=&TamanoPagina="
+          }
+        },
+        {
+          "name": "Resumen de IVA por alícuota del período (en pesos; las notas de crédito restan).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/resumen-iva?desde=&hasta="
+          }
+        },
+        {
+          "name": "Exporta a CSV (Excel) los comprobantes autorizados del período.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/exportar.csv?desde=&hasta="
+          }
+        },
+        {
+          "name": "Números autorizados en ARCA que no emitió este servicio (otro sistema usa el punto de vent",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/auditoria-numeracion/{{ptoVta}}/{{cbteTipo}}?desde="
+          }
+        },
+        {
+          "name": "Consulta la auditoría (más recientes primero).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/auditoria?desde=&cliente=&maximo="
+          }
+        },
+        {
+          "name": "Configuración efectiva (sin secretos) y advertencias de riesgo.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/config"
+          }
+        },
+        {
+          "name": "Emisiones con resultado aún no confirmado.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/emisiones/pendientes"
+          }
+        },
+        {
+          "name": "Fuerza la reconciliación de todas las emisiones pendientes.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/emisiones/reconciliar"
+          }
+        },
+        {
+          "name": "Resumen del registro de emisiones (totales, del día y por tipo).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/estadisticas"
+          }
+        },
+        {
+          "name": "Vacía la caché de tablas de parámetros y cotizaciones.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/cache/limpiar"
+          }
+        },
+        {
+          "name": "Ventas por receptor (top N, en pesos; NC restan).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/reportes/por-receptor?desde=&hasta=&top="
+          }
+        },
+        {
+          "name": "Serie diaria de ventas.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/reportes/por-dia?desde=&hasta="
+          }
+        },
+        {
+          "name": "Ventas por punto de venta.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/reportes/por-punto-venta?desde=&hasta="
+          }
+        },
+        {
+          "name": "Cierre diario: emitidos y totales por punto de venta y tipo, y control del último número c",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/cierre-diario?fecha="
+          }
+        },
+        {
+          "name": "Puntos de venta con estado legible (habilitado / bloqueado / dado de baja).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/puntos-venta"
+          }
+        },
+        {
+          "name": "Rechazos recientes de ARCA y códigos más frecuentes.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/rechazos?maximo="
+          }
+        },
+        {
+          "name": "Respaldo del registro de emisiones (JSON Lines).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/registro/exportar"
+          }
+        },
+        {
+          "name": "Restaura un respaldo JSONL: sólo agrega claves inexistentes.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/registro/importar"
+          }
+        },
+        {
+          "name": "Resuelve manualmente una emisión pendiente (por clave interna \"cliente:idempotencyKey\").",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/emisiones/resolver?clave="
+          }
+        },
+        {
+          "name": "Reenvía el webhook de una emisión registrada.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/webhook/reenviar?clave="
+          }
+        },
+        {
+          "name": "Envía un evento de prueba a las URLs de webhook configuradas.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/webhook/prueba"
+          }
+        },
+        {
+          "name": "Últimas entregas de webhook.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/webhook/entregas?maximo="
+          }
+        },
+        {
+          "name": "Activa el modo mantenimiento (las emisiones responden 503; las consultas siguen).",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/mantenimiento?motivo="
+          }
+        },
+        {
+          "name": "Desactiva el modo mantenimiento.",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/mantenimiento"
+          }
+        },
+        {
+          "name": "Verifica la integridad de la cadena de hashes de la auditoría.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/auditoria/verificar"
+          }
+        },
+        {
+          "name": "Ejecuta ahora las suscripciones vencidas.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/admin/suscripciones/ejecutar"
+          }
+        }
+      ]
+    },
+    {
+      "name": "CAEA",
+      "item": [
+        {
+          "name": "FECAEASolicitar. Periodo yyyyMM, orden 1 (días 1-15) o 2 (16-fin de mes).",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/{{periodo}}/{{orden}}"
+          }
+        },
+        {
+          "name": "FECAEAConsultar. 404 si no existe.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/{{periodo}}/{{orden}}"
+          }
+        },
+        {
+          "name": "FECAEARegInformativo: informa comprobantes emitidos con CAEA.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/comprobantes",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "FECAEASinMovimientoInformar: informa que un punto de venta no tuvo movimientos con un CAEA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/{{caea}}/sin-movimiento/{{ptoVta}}"
+          }
+        },
+        {
+          "name": "FECAEASinMovimientoConsultar.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/{{caea}}/sin-movimiento/{{ptoVta}}"
+          }
+        },
+        {
+          "name": "Devuelve el CAEA de la quincena actual (404 si no fue solicitado).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/caea/vigente"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catálogos",
+      "item": [
+        {
+          "name": "Tipos de comprobante, documentos, condiciones frente al IVA y alícuotas.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/catalogos"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Comprobantes",
+      "item": [
+        {
+          "name": "Emite un comprobante: numera (último autorizado + 1), solicita CAE y reconcilia ante falla",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ptoVta\": 3,\n  \"cbteTipo\": 6,\n  \"comprobante\": {\n    \"concepto\": 1,\n    \"docTipo\": 99,\n    \"docNro\": 0,\n    \"impTotal\": 121,\n    \"impNeto\": 100,\n    \"impIVA\": 21,\n    \"monId\": \"PES\",\n    \"monCotiz\": 1,\n    \"condicionIVAReceptorId\": 5,\n    \"iva\": [\n      {\n        \"id\": 5,\n        \"baseImp\": 100,\n        \"importe\": 21\n      }\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "FECAESolicitar directo (lote con numeración provista por el llamador). Uso avanzado.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/cae",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "FECompUltimoAutorizado: último número autorizado para punto de venta y tipo.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/ultimo?ptoVta=&cbteTipo="
+          }
+        },
+        {
+          "name": "FECompConsultar: datos de un comprobante emitido. 404 si no existe.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}"
+          }
+        },
+        {
+          "name": "FECompTotXRequest: cantidad máxima de registros por lote.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/max-registros"
+          }
+        },
+        {
+          "name": "Nota de Crédito PARCIAL asociada a un comprobante: devuelve sólo los importes indicados.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/nota-credito-parcial",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cbteTipo\": 6,\n  \"preciosConIvaIncluido\": true,\n  \"lineas\": [\n    {\n      \"cantidad\": 2,\n      \"precioUnitario\": 1210,\n      \"alicuotaIvaId\": 5,\n      \"bonificacionPorcentaje\": 10\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Emite un comprobante nuevo idéntico a uno existente, con fecha de hoy (facturación recurre",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/duplicar"
+          }
+        },
+        {
+          "name": "Consulta en ARCA un rango de números (máx. 100). Los inexistentes se omiten.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}?desde=&hasta="
+          }
+        },
+        {
+          "name": "Emite hasta 50 comprobantes en una llamada. Cada ítem tiene su propia Idempotency-Key y su",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/lote",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Calcula importes coherentes (IVA por alícuota, redondeo a 2 decimales y total) a partir de",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/calcular",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cbteTipo\": 6,\n  \"preciosConIvaIncluido\": true,\n  \"lineas\": [\n    {\n      \"cantidad\": 2,\n      \"precioUnitario\": 1210,\n      \"alicuotaIvaId\": 5,\n      \"bonificacionPorcentaje\": 10\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Anula totalmente un comprobante emitiendo la Nota de Crédito de la misma clase, asociada a",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/nota-credito"
+          }
+        },
+        {
+          "name": "URL del QR fiscal (RG 4892) de un comprobante ya autorizado.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/qr"
+          }
+        },
+        {
+          "name": "Estado de una emisión por su Idempotency-Key (Pendiente / Autorizado). 404 si no existe.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/emisiones/{{idempotencyKey}}"
+          }
+        },
+        {
+          "name": "Valida un comprobante SIN emitirlo: errores (impiden emitir) y advertencias (conviene revi",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/validar",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ptoVta\": 3,\n  \"cbteTipo\": 6,\n  \"comprobante\": {\n    \"concepto\": 1,\n    \"docTipo\": 99,\n    \"docNro\": 0,\n    \"impTotal\": 121,\n    \"impNeto\": 100,\n    \"impIVA\": 21,\n    \"monId\": \"PES\",\n    \"monCotiz\": 1,\n    \"condicionIVAReceptorId\": 5,\n    \"iva\": [\n      {\n        \"id\": 5,\n        \"baseImp\": 100,\n        \"importe\": 21\n      }\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Estado de varias emisiones por sus Idempotency-Key (máx. 200).",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/emisiones/estado",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Próximo número que asignaría ARCA (informativo; la emisión numera bajo bloqueo).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/proximo?ptoVta=&cbteTipo="
+          }
+        },
+        {
+          "name": "QR fiscal en PNG de un comprobante autorizado.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/qr.png"
+          }
+        },
+        {
+          "name": "Representación imprimible (HTML) con datos del emisor, receptor, importes, importe en letr",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/{{ptoVta}}/{{cbteTipo}}/{{cbteNro}}/html?copia="
+          }
+        },
+        {
+          "name": "Importe en letras.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/comprobantes/importe-en-letras?importe=&monId="
+          }
+        }
+      ]
+    },
+    {
+      "name": "Parámetros de ARCA",
+      "item": [
+        {
+          "name": "FEParamGetTiposCbte",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-comprobante"
+          }
+        },
+        {
+          "name": "FEParamGetTiposConcepto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-concepto"
+          }
+        },
+        {
+          "name": "FEParamGetTiposDoc",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-documento"
+          }
+        },
+        {
+          "name": "FEParamGetTiposIva",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-iva"
+          }
+        },
+        {
+          "name": "FEParamGetTiposMonedas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/monedas"
+          }
+        },
+        {
+          "name": "FEParamGetTiposOpcional",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-opcional"
+          }
+        },
+        {
+          "name": "FEParamGetTiposTributos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/tipos-tributo"
+          }
+        },
+        {
+          "name": "FEParamGetTiposPaises",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/paises"
+          }
+        },
+        {
+          "name": "FEParamGetPtosVenta (puntos de venta habilitados para web services).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/puntos-venta"
+          }
+        },
+        {
+          "name": "FEParamGetActividades (actividades del emisor).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/actividades"
+          }
+        },
+        {
+          "name": "FEParamGetCondicionIvaReceptor. claseCmp opcional: A, B, C o M.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/condiciones-iva-receptor?claseCmp="
+          }
+        },
+        {
+          "name": "FEParamGetCotizacion. fecha opcional yyyyMMdd.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/parametros/cotizacion/{{monId}}?fecha="
+          }
+        }
+      ]
+    },
+    {
+      "name": "Plantillas",
+      "item": [
+        {
+          "name": "Lista las plantillas del cliente.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/plantillas"
+          }
+        },
+        {
+          "name": "Obtiene una plantilla.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/plantillas/{{id}}"
+          }
+        },
+        {
+          "name": "Crea o reemplaza una plantilla.",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/plantillas/{{id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Elimina una plantilla.",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/plantillas/{{id}}"
+          }
+        },
+        {
+          "name": "Emite un comprobante a partir de la plantilla, con importes y receptor opcionales.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/plantillas/{{id}}/emitir",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Receptores",
+      "item": [
+        {
+          "name": "Busca por nombre, documento o id (texto opcional).",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/receptores?texto="
+          }
+        },
+        {
+          "name": "GET /api/v1/receptores/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/receptores/{{id}}"
+          }
+        },
+        {
+          "name": "Crea o reemplaza un receptor (valida CUIT y condición frente al IVA).",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/receptores/{{id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/receptores/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/receptores/{{id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "FEDummy: estado de AppServer, DbServer y AuthServer de WSFEv1. 503 si alguno no está OK.",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/salud/arca"
+          }
+        },
+        {
+          "name": "Versión, ambiente, CUIT (enmascarada), vencimiento del certificado y estado del canal con ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/info"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Suscripciones",
+      "item": [
+        {
+          "name": "GET /api/v1/suscripciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones"
+          }
+        },
+        {
+          "name": "GET /api/v1/suscripciones/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}"
+          }
+        },
+        {
+          "name": "Crea o reemplaza una suscripción. Se valida el comprobante con un período de ejemplo.",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/suscripciones/{id}",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}"
+          }
+        },
+        {
+          "name": "Pausa la suscripción.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}/pausar"
+          }
+        },
+        {
+          "name": "Reanuda la suscripción.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}/reanudar"
+          }
+        },
+        {
+          "name": "Libera una suscripción retenida por períodos atrasados.",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/suscripciones/{{id}}/confirmar-atrasos"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Padrón",
+      "item": [
+        {
+          "name": "Datos del contribuyente (denominación, estado de clave y domicilios). 400 si la CUIT es in",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/contribuyentes/{{cuit}}"
+          }
+        },
+        {
+          "name": "Crea o actualiza un receptor de la agenda con los datos del padrón (DocTipo 80). La condic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{apiKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v1/contribuyentes/{{cuit}}/agenda?condicionIva="
+          }
+        }
+      ]
+    }
+  ]
+}

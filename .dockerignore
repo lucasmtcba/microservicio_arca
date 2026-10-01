@@ -1,0 +1,10 @@
+**/bin
+**/obj
+**/data
+**/certs
+*.pfx
+*.p12
+.git
+.github
+docs
+tests

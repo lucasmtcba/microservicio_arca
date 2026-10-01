@@ -1,0 +1,4825 @@
+openapi: 3.0.1
+info:
+  title: Microservicio de Facturación Electrónica ARCA (ex AFIP)
+  description: Fachada REST sobre WSAA + WSFEv1 de ARCA. Obtiene CAE/CAEA, consulta
+    comprobantes y tablas de parámetros, emite notas de crédito, calcula importes
+    y genera el QR fiscal. Autenticación por cabecera X-Api-Key (permisos emitir /
+    consultar / admin). Fechas yyyyMMdd, importes con punto decimal y hasta 2 decimales.
+    Todas las respuestas incluyen X-Correlation-Id.
+  version: v1
+paths:
+  /api/v1/admin/emisiones:
+    get:
+      tags:
+      - Administración
+      summary: Búsqueda paginada de emisiones por punto de venta, tipo, fechas, documento,
+        estado o cliente.
+      parameters:
+      - name: PtoVta
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: CbteTipo
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: Desde
+        in: query
+        description: yyyyMMdd
+        schema:
+          type: string
+      - name: Hasta
+        in: query
+        description: yyyyMMdd
+        schema:
+          type: string
+      - name: DocNro
+        in: query
+        schema:
+          type: integer
+          format: int64
+      - name: Estado
+        in: query
+        schema:
+          $ref: '#/components/schemas/EstadoEmision'
+      - name: Cliente
+        in: query
+        schema:
+          type: string
+      - name: Referencia
+        in: query
+        description: Referencia externa exacta.
+        schema:
+          type: string
+      - name: Pagina
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: TamanoPagina
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistroEmisionPagina'
+  /api/v1/admin/resumen-iva:
+    get:
+      tags:
+      - Administración
+      summary: Resumen de IVA por alícuota del período (en pesos; las notas de crédito
+        restan).
+      parameters:
+      - name: desde
+        in: query
+        required: true
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: hasta
+        in: query
+        required: true
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResumenIva'
+  /api/v1/admin/exportar.csv:
+    get:
+      tags:
+      - Administración
+      summary: Exporta a CSV (Excel) los comprobantes autorizados del período.
+      parameters:
+      - name: desde
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: hasta
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/auditoria-numeracion/{ptoVta}/{cbteTipo}:
+    get:
+      tags:
+      - Administración
+      summary: Números autorizados en ARCA que no emitió este servicio (otro sistema
+        usa el punto de venta).
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: desde
+        in: query
+        schema:
+          minimum: 1
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/auditoria:
+    get:
+      tags:
+      - Administración
+      summary: Consulta la auditoría (más recientes primero).
+      parameters:
+      - name: desde
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: cliente
+        in: query
+        schema:
+          type: string
+      - name: maximo
+        in: query
+        schema:
+          maximum: 1000
+          minimum: 1
+          type: integer
+          format: int32
+          default: 100
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntradaAuditoria'
+  /api/v1/admin/config:
+    get:
+      tags:
+      - Administración
+      summary: Configuración efectiva (sin secretos) y advertencias de riesgo.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/emisiones/pendientes:
+    get:
+      tags:
+      - Administración
+      summary: Emisiones con resultado aún no confirmado.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RegistroEmision'
+  /api/v1/admin/emisiones/reconciliar:
+    post:
+      tags:
+      - Administración
+      summary: Fuerza la reconciliación de todas las emisiones pendientes.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/estadisticas:
+    get:
+      tags:
+      - Administración
+      summary: Resumen del registro de emisiones (totales, del día y por tipo).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadisticasEmision'
+  /api/v1/admin/cache/limpiar:
+    post:
+      tags:
+      - Administración
+      summary: Vacía la caché de tablas de parámetros y cotizaciones.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/reportes/por-receptor:
+    get:
+      tags:
+      - Administración
+      summary: Ventas por receptor (top N, en pesos; NC restan).
+      parameters:
+      - name: desde
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: hasta
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: top
+        in: query
+        schema:
+          maximum: 1000
+          minimum: 1
+          type: integer
+          format: int32
+          default: 20
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VentaPorReceptor'
+  /api/v1/admin/reportes/por-dia:
+    get:
+      tags:
+      - Administración
+      summary: Serie diaria de ventas.
+      parameters:
+      - name: desde
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: hasta
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VentaPorDia'
+  /api/v1/admin/reportes/por-punto-venta:
+    get:
+      tags:
+      - Administración
+      summary: Ventas por punto de venta.
+      parameters:
+      - name: desde
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: hasta
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VentaPorPuntoVenta'
+  /api/v1/admin/cierre-diario:
+    get:
+      tags:
+      - Administración
+      summary: 'Cierre diario: emitidos y totales por punto de venta y tipo, y control
+        del último número contra ARCA.'
+      parameters:
+      - name: fecha
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CierreDiario'
+  /api/v1/admin/puntos-venta:
+    get:
+      tags:
+      - Administración
+      summary: Puntos de venta con estado legible (habilitado / bloqueado / dado de
+        baja).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {}
+  /api/v1/admin/rechazos:
+    get:
+      tags:
+      - Administración
+      summary: Rechazos recientes de ARCA y códigos más frecuentes.
+      parameters:
+      - name: maximo
+        in: query
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/registro/exportar:
+    get:
+      tags:
+      - Administración
+      summary: Respaldo del registro de emisiones (JSON Lines).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/registro/importar:
+    post:
+      tags:
+      - Administración
+      summary: 'Restaura un respaldo JSONL: sólo agrega claves inexistentes.'
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/emisiones/resolver:
+    post:
+      tags:
+      - Administración
+      summary: Resuelve manualmente una emisión pendiente (por clave interna "cliente:idempotencyKey").
+      parameters:
+      - name: clave
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/webhook/reenviar:
+    post:
+      tags:
+      - Administración
+      summary: Reenvía el webhook de una emisión registrada.
+      parameters:
+      - name: clave
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/webhook/prueba:
+    post:
+      tags:
+      - Administración
+      summary: Envía un evento de prueba a las URLs de webhook configuradas.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/webhook/entregas:
+    get:
+      tags:
+      - Administración
+      summary: Últimas entregas de webhook.
+      parameters:
+      - name: maximo
+        in: query
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EntregaWebhook'
+  /api/v1/admin/mantenimiento:
+    post:
+      tags:
+      - Administración
+      summary: Activa el modo mantenimiento (las emisiones responden 503; las consultas
+        siguen).
+      parameters:
+      - name: motivo
+        in: query
+        schema:
+          maxLength: 200
+          minLength: 0
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+    delete:
+      tags:
+      - Administración
+      summary: Desactiva el modo mantenimiento.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/auditoria/verificar:
+    get:
+      tags:
+      - Administración
+      summary: Verifica la integridad de la cadena de hashes de la auditoría.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/admin/suscripciones/ejecutar:
+    post:
+      tags:
+      - Administración
+      summary: Ejecuta ahora las suscripciones vencidas.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/caea/{periodo}/{orden}:
+    post:
+      tags:
+      - CAEA
+      summary: FECAEASolicitar. Periodo yyyyMM, orden 1 (días 1-15) o 2 (16-fin de
+        mes).
+      parameters:
+      - name: periodo
+        in: path
+        required: true
+        schema:
+          maximum: 299912
+          minimum: 200001
+          type: integer
+          format: int32
+      - name: orden
+        in: path
+        required: true
+        schema:
+          maximum: 2
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Caea'
+    get:
+      tags:
+      - CAEA
+      summary: FECAEAConsultar. 404 si no existe.
+      parameters:
+      - name: periodo
+        in: path
+        required: true
+        schema:
+          maximum: 299912
+          minimum: 200001
+          type: integer
+          format: int32
+      - name: orden
+        in: path
+        required: true
+        schema:
+          maximum: 2
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Caea'
+  /api/v1/caea/comprobantes:
+    post:
+      tags:
+      - CAEA
+      summary: 'FECAEARegInformativo: informa comprobantes emitidos con CAEA.'
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InformeCaea'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/InformeCaea'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespuestaCae'
+  /api/v1/caea/{caea}/sin-movimiento/{ptoVta}:
+    post:
+      tags:
+      - CAEA
+      summary: 'FECAEASinMovimientoInformar: informa que un punto de venta no tuvo
+        movimientos con un CAEA.'
+      parameters:
+      - name: caea
+        in: path
+        required: true
+        schema:
+          pattern: ^\d{14}$
+          type: string
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaeaSinMovimiento'
+    get:
+      tags:
+      - CAEA
+      summary: FECAEASinMovimientoConsultar.
+      parameters:
+      - name: caea
+        in: path
+        required: true
+        schema:
+          pattern: ^\d{14}$
+          type: string
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CaeaSinMovimiento'
+  /api/v1/caea/vigente:
+    get:
+      tags:
+      - CAEA
+      summary: Devuelve el CAEA de la quincena actual (404 si no fue solicitado).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Caea'
+  /api/v1/catalogos:
+    get:
+      tags:
+      - Catálogos
+      summary: Tipos de comprobante, documentos, condiciones frente al IVA y alícuotas.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes:
+    post:
+      tags:
+      - Comprobantes
+      summary: 'Emite un comprobante: numera (último autorizado + 1), solicita CAE
+        y reconcilia ante fallas de red.'
+      description: "Enviar siempre `Idempotency-Key` (UUID) para poder reintentar\
+        \ sin duplicar comprobantes.\r\n            Devuelve 200 con Resultado \"\
+        A\" (CAE otorgado) o \"R\" (rechazado, ver Errores/Observaciones)."
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        description: Clave única por intento lógico de emisión (máx. 100 caracteres).
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 1
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        description: Datos del comprobante.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirComprobanteRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/EmitirComprobanteRequest'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoEmision'
+        '400':
+          description: Bad Request
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Service Unavailable
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/comprobantes/cae:
+    post:
+      tags:
+      - Comprobantes
+      summary: FECAESolicitar directo (lote con numeración provista por el llamador).
+        Uso avanzado.
+      description: "Deshabilitado por defecto (Arca:PermitirSolicitudDirecta). NO\
+        \ tiene idempotencia, lock de numeración\r\n            ni reconciliación:\
+        \ ante un timeout el llamador debe consultar con FECompConsultar antes de\
+        \ reintentar."
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCae'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCae'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespuestaCae'
+        '403':
+          description: Forbidden
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/comprobantes/ultimo:
+    get:
+      tags:
+      - Comprobantes
+      summary: 'FECompUltimoAutorizado: último número autorizado para punto de venta
+        y tipo.'
+      parameters:
+      - name: ptoVta
+        in: query
+        schema:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: query
+        schema:
+          maximum: 999
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UltimoComprobante'
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}:
+    get:
+      tags:
+      - Comprobantes
+      summary: 'FECompConsultar: datos de un comprobante emitido. 404 si no existe.'
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteConsultado'
+        '404':
+          description: Not Found
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/comprobantes/max-registros:
+    get:
+      tags:
+      - Comprobantes
+      summary: 'FECompTotXRequest: cantidad máxima de registros por lote.'
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/nota-credito-parcial:
+    post:
+      tags:
+      - Comprobantes
+      summary: 'Nota de Crédito PARCIAL asociada a un comprobante: devuelve sólo los
+        importes indicados.'
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 1
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCalculo'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCalculo'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoEmision'
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/duplicar:
+    post:
+      tags:
+      - Comprobantes
+      summary: Emite un comprobante nuevo idéntico a uno existente, con fecha de hoy
+        (facturación recurrente).
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 1
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoEmision'
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}:
+    get:
+      tags:
+      - Comprobantes
+      summary: Consulta en ARCA un rango de números (máx. 100). Los inexistentes se
+        omiten.
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: desde
+        in: query
+        schema:
+          minimum: 1
+          type: integer
+          format: int64
+      - name: hasta
+        in: query
+        schema:
+          minimum: 1
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ComprobanteConsultado'
+  /api/v1/comprobantes/lote:
+    post:
+      tags:
+      - Comprobantes
+      summary: "Emite hasta 50 comprobantes en una llamada. Cada ítem tiene su propia\
+        \ Idempotency-Key y su propio resultado;\r\n            un error en un ítem\
+        \ no detiene al resto. Reintentar el lote completo es seguro."
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudLote'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/SolicitudLote'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResultadoItemLote'
+  /api/v1/comprobantes/calcular:
+    post:
+      tags:
+      - Comprobantes
+      summary: "Calcula importes coherentes (IVA por alícuota, redondeo a 2 decimales\
+        \ y total) a partir de líneas netas.\r\n            La respuesta puede usarse\
+        \ directamente como \"comprobante\" completando receptor, concepto y condición\
+        \ IVA."
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCalculo'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCalculo'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprobanteDetalle'
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/nota-credito:
+    post:
+      tags:
+      - Comprobantes
+      summary: Anula totalmente un comprobante emitiendo la Nota de Crédito de la
+        misma clase, asociada al original.
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 1
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoEmision'
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/qr:
+    get:
+      tags:
+      - Comprobantes
+      summary: URL del QR fiscal (RG 4892) de un comprobante ya autorizado.
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes/emisiones/{idempotencyKey}:
+    get:
+      tags:
+      - Comprobantes
+      summary: Estado de una emisión por su Idempotency-Key (Pendiente / Autorizado).
+        404 si no existe.
+      parameters:
+      - name: idempotencyKey
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistroEmision'
+  /api/v1/comprobantes/validar:
+    post:
+      tags:
+      - Comprobantes
+      summary: 'Valida un comprobante SIN emitirlo: errores (impiden emitir) y advertencias
+        (conviene revisar).'
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmitirComprobanteRequest'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/EmitirComprobanteRequest'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoValidacion'
+  /api/v1/comprobantes/emisiones/estado:
+    post:
+      tags:
+      - Comprobantes
+      summary: Estado de varias emisiones por sus Idempotency-Key (máx. 200).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsultaEstados'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/ConsultaEstados'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+  /api/v1/comprobantes/proximo:
+    get:
+      tags:
+      - Comprobantes
+      summary: Próximo número que asignaría ARCA (informativo; la emisión numera bajo
+        bloqueo).
+      parameters:
+      - name: ptoVta
+        in: query
+        schema:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: query
+        schema:
+          maximum: 999
+          minimum: 1
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/qr.png:
+    get:
+      tags:
+      - Comprobantes
+      summary: QR fiscal en PNG de un comprobante autorizado.
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}/html:
+    get:
+      tags:
+      - Comprobantes
+      summary: "Representación imprimible (HTML) con datos del emisor, receptor, importes,\
+        \ importe en letras, QR y CAE.\r\n            copia: ORIGINAL, DUPLICADO o\
+        \ TRIPLICADO."
+      parameters:
+      - name: ptoVta
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteTipo
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: cbteNro
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: copia
+        in: query
+        schema:
+          pattern: ^(ORIGINAL|DUPLICADO|TRIPLICADO)$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/comprobantes/importe-en-letras:
+    get:
+      tags:
+      - Comprobantes
+      summary: Importe en letras.
+      parameters:
+      - name: importe
+        in: query
+        schema:
+          type: number
+          format: double
+      - name: monId
+        in: query
+        schema:
+          pattern: ^[A-Z0-9]{3}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/contribuyentes/{cuit}:
+    get:
+      tags:
+      - Padrón
+      summary: Datos del contribuyente (denominación, estado de clave y domicilios).
+        400 si la CUIT es inválida, 404 si no existe.
+      parameters:
+      - name: cuit
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Contribuyente'
+        '400':
+          description: Bad Request
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/contribuyentes/{cuit}/agenda:
+    post:
+      tags:
+      - Padrón
+      summary: "Crea o actualiza un receptor de la agenda con los datos del padrón\
+        \ (DocTipo 80). La condición frente al IVA se\r\n            indica en la\
+        \ consulta porque el padrón A13 no la informa."
+      parameters:
+      - name: cuit
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: condicionIva
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receptor'
+        '404':
+          description: Not Found
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/parametros/tipos-comprobante:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposCbte
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/tipos-concepto:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposConcepto
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/tipos-documento:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposDoc
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/tipos-iva:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposIva
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/monedas:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposMonedas
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/tipos-opcional:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposOpcional
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/tipos-tributo:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposTributos
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/paises:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetTiposPaises
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/puntos-venta:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetPtosVenta (puntos de venta habilitados para web services).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/actividades:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetActividades (actividades del emisor).
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/condiciones-iva-receptor:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: 'FEParamGetCondicionIvaReceptor. claseCmp opcional: A, B, C o M.'
+      parameters:
+      - name: claseCmp
+        in: query
+        schema:
+          pattern: ^(A|B|C|M)$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ParametroItem'
+  /api/v1/parametros/cotizacion/{monId}:
+    get:
+      tags:
+      - Parámetros de ARCA
+      summary: FEParamGetCotizacion. fecha opcional yyyyMMdd.
+      parameters:
+      - name: monId
+        in: path
+        required: true
+        schema:
+          pattern: ^[A-Z0-9]{3}$
+          type: string
+      - name: fecha
+        in: query
+        schema:
+          pattern: ^\d{8}$
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cotizacion'
+  /api/v1/plantillas:
+    get:
+      tags:
+      - Plantillas
+      summary: Lista las plantillas del cliente.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlantillaComprobante'
+  /api/v1/plantillas/{id}:
+    get:
+      tags:
+      - Plantillas
+      summary: Obtiene una plantilla.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantillaComprobante'
+    put:
+      tags:
+      - Plantillas
+      summary: Crea o reemplaza una plantilla.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlantillaComprobante'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/PlantillaComprobante'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlantillaComprobante'
+    delete:
+      tags:
+      - Plantillas
+      summary: Elimina una plantilla.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/plantillas/{id}/emitir:
+    post:
+      tags:
+      - Plantillas
+      summary: Emite un comprobante a partir de la plantilla, con importes y receptor
+        opcionales.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          maxLength: 100
+          minLength: 1
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmisionDesdePlantilla'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/EmisionDesdePlantilla'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoEmision'
+  /api/v1/receptores:
+    get:
+      tags:
+      - Receptores
+      summary: Busca por nombre, documento o id (texto opcional).
+      parameters:
+      - name: texto
+        in: query
+        schema:
+          maxLength: 100
+          minLength: 0
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Receptor'
+  /api/v1/receptores/{id}:
+    get:
+      tags:
+      - Receptores
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receptor'
+    put:
+      tags:
+      - Receptores
+      summary: Crea o reemplaza un receptor (valida CUIT y condición frente al IVA).
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Receptor'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/Receptor'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Receptor'
+    delete:
+      tags:
+      - Receptores
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/salud/arca:
+    get:
+      tags:
+      - Salud
+      summary: 'FEDummy: estado de AppServer, DbServer y AuthServer de WSFEv1. 503
+        si alguno no está OK.'
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+        '503':
+          description: Service Unavailable
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+            text/json:
+              schema:
+                $ref: '#/components/schemas/EstadoServidores'
+  /api/v1/info:
+    get:
+      tags:
+      - Salud
+      summary: Versión, ambiente, CUIT (enmascarada), vencimiento del certificado
+        y estado del canal con ARCA.
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/suscripciones:
+    get:
+      tags:
+      - Suscripciones
+      parameters:
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Suscripcion'
+  /api/v1/suscripciones/{id}:
+    get:
+      tags:
+      - Suscripciones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suscripcion'
+    put:
+      tags:
+      - Suscripciones
+      summary: Crea o reemplaza una suscripción. Se valida el comprobante con un período
+        de ejemplo.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Suscripcion'
+          application/*+json:
+            schema:
+              $ref: '#/components/schemas/Suscripcion'
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suscripcion'
+    delete:
+      tags:
+      - Suscripciones
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+  /api/v1/suscripciones/{id}/confirmar-atrasos:
+    post:
+      tags:
+      - Suscripciones
+      summary: Libera una suscripción retenida por períodos atrasados.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suscripcion'
+  /api/v1/suscripciones/{id}/pausar:
+    post:
+      tags:
+      - Suscripciones
+      summary: Pausa la suscripción.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suscripcion'
+  /api/v1/suscripciones/{id}/reanudar:
+    post:
+      tags:
+      - Suscripciones
+      summary: Reanuda la suscripción.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: X-Correlation-Id
+        in: header
+        description: 'Opcional: identificador de correlación propio (máx. 64, letras,
+          dígitos, - y _).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              description: Identificador de correlación (eco del enviado o generado).
+              schema:
+                type: string
+            X-Api-Version:
+              description: Versión del servicio.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Suscripcion'
+components:
+  schemas:
+    AlicuotaIva:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 'Código de alícuota (FEParamGetTiposIva): 3=0%, 4=10.5%, 5=21%,
+            6=27%, 8=5%, 9=2.5%.'
+          format: int32
+        baseImp:
+          type: number
+          format: double
+        importe:
+          type: number
+          format: double
+      additionalProperties: false
+    ArcaMensaje:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        msg:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: Error/evento/observación devuelto por ARCA.
+    CabeceraRespuesta:
+      type: object
+      properties:
+        cuit:
+          type: integer
+          format: int64
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        fchProceso:
+          type: string
+          nullable: true
+        cantReg:
+          type: integer
+          format: int32
+        resultado:
+          type: string
+          description: A=Aprobado, R=Rechazado, P=Parcial.
+          nullable: true
+        reproceso:
+          type: string
+          nullable: true
+      additionalProperties: false
+    Caea:
+      type: object
+      properties:
+        codigo:
+          type: string
+          nullable: true
+        periodo:
+          type: integer
+          format: int32
+        orden:
+          type: integer
+          format: int32
+        fchVigDesde:
+          type: string
+          nullable: true
+        fchVigHasta:
+          type: string
+          nullable: true
+        fchTopeInf:
+          type: string
+          nullable: true
+        fchProceso:
+          type: string
+          nullable: true
+        observaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+      additionalProperties: false
+    CaeaSinMovimiento:
+      type: object
+      properties:
+        caea:
+          type: string
+          nullable: true
+        fchProceso:
+          type: string
+          nullable: true
+        ptoVta:
+          type: integer
+          format: int32
+        resultado:
+          type: string
+          nullable: true
+      additionalProperties: false
+    CierreDiario:
+      type: object
+      properties:
+        fecha:
+          type: string
+          nullable: true
+        tipos:
+          type: array
+          items:
+            $ref: '#/components/schemas/CierreTipo'
+          nullable: true
+        pendientes:
+          type: integer
+          format: int32
+        consistente:
+          type: boolean
+          readOnly: true
+      additionalProperties: false
+    CierreTipo:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        descripcion:
+          type: string
+          nullable: true
+        emitidos:
+          type: integer
+          format: int32
+        total:
+          type: number
+          format: double
+        ultimoRegistro:
+          type: integer
+          format: int64
+        ultimoArca:
+          type: integer
+          format: int64
+        consistente:
+          type: boolean
+          description: true si el último número de ARCA coincide con el último emitido
+            por este servicio.
+          readOnly: true
+      additionalProperties: false
+    Comprador:
+      type: object
+      properties:
+        docTipo:
+          type: integer
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        porcentaje:
+          type: number
+          format: double
+      additionalProperties: false
+    ComprobanteAsociado:
+      type: object
+      properties:
+        tipo:
+          type: integer
+          description: Tipo de comprobante asociado (FEParamGetTiposCbte).
+          format: int32
+        ptoVta:
+          type: integer
+          format: int32
+        nro:
+          type: integer
+          format: int64
+        cuit:
+          type: string
+          description: CUIT del emisor del comprobante asociado (opcional).
+          nullable: true
+        cbteFch:
+          type: string
+          description: Fecha del comprobante asociado, yyyyMMdd (opcional).
+          nullable: true
+      additionalProperties: false
+      description: Comprobante asociado (obligatorio en Notas de Crédito/Débito si
+        no se informa PeriodoAsoc).
+    ComprobanteCaea:
+      type: object
+      properties:
+        concepto:
+          maximum: 3
+          minimum: 1
+          type: integer
+          description: 1=Productos, 2=Servicios, 3=Productos y Servicios.
+          format: int32
+        docTipo:
+          type: integer
+          description: Tipo de documento del receptor (80=CUIT, 86=CUIL, 96=DNI, 99=Consumidor
+            Final sin identificar).
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        cbteFch:
+          type: string
+          description: Fecha del comprobante yyyyMMdd. Si se omite, ARCA usa la fecha
+            de proceso.
+          nullable: true
+        impTotal:
+          type: number
+          format: double
+        impTotConc:
+          type: number
+          format: double
+        impNeto:
+          type: number
+          format: double
+        impOpEx:
+          type: number
+          format: double
+        impTrib:
+          type: number
+          format: double
+        impIVA:
+          type: number
+          format: double
+        fchServDesde:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchServHasta:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchVtoPago:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3 (salvo Factura de
+            Crédito Electrónica).
+          nullable: true
+        monId:
+          type: string
+          description: Código de moneda (FEParamGetTiposMonedas). PES = pesos.
+          nullable: true
+        monCotiz:
+          type: number
+          format: double
+        canMisMonExt:
+          type: string
+          description: '"S" si se cancela en la misma moneda extranjera, "N" si no
+            (sólo MonId distinto de PES).'
+          nullable: true
+        condicionIVAReceptorId:
+          type: integer
+          description: Condición frente al IVA del receptor (FEParamGetCondicionIvaReceptor).
+            Obligatorio (RG 5616).
+          format: int32
+          nullable: true
+        cbtesAsoc:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteAsociado'
+          nullable: true
+        tributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tributo'
+          nullable: true
+        iva:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlicuotaIva'
+          nullable: true
+        opcionales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opcional'
+          nullable: true
+        compradores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comprador'
+          nullable: true
+        periodoAsoc:
+          $ref: '#/components/schemas/PeriodoAsociado'
+        actividades:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        referenciaExterna:
+          maxLength: 100
+          type: string
+          description: Referencia propia del sistema consumidor (p.ej. número de pedido).
+            No se envía a ARCA; sirve para buscar emisiones.
+          nullable: true
+        cbteDesde:
+          type: integer
+          format: int64
+        cbteHasta:
+          type: integer
+          format: int64
+        caea:
+          type: string
+          nullable: true
+        cbteFchHsGen:
+          type: string
+          description: Fecha y hora de generación yyyyMMddHHmmss (opcional).
+          nullable: true
+      additionalProperties: false
+      description: Detalle para informar comprobantes emitidos con CAEA.
+    ComprobanteConsultado:
+      type: object
+      properties:
+        concepto:
+          maximum: 3
+          minimum: 1
+          type: integer
+          description: 1=Productos, 2=Servicios, 3=Productos y Servicios.
+          format: int32
+        docTipo:
+          type: integer
+          description: Tipo de documento del receptor (80=CUIT, 86=CUIL, 96=DNI, 99=Consumidor
+            Final sin identificar).
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        cbteFch:
+          type: string
+          description: Fecha del comprobante yyyyMMdd. Si se omite, ARCA usa la fecha
+            de proceso.
+          nullable: true
+        impTotal:
+          type: number
+          format: double
+        impTotConc:
+          type: number
+          format: double
+        impNeto:
+          type: number
+          format: double
+        impOpEx:
+          type: number
+          format: double
+        impTrib:
+          type: number
+          format: double
+        impIVA:
+          type: number
+          format: double
+        fchServDesde:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchServHasta:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchVtoPago:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3 (salvo Factura de
+            Crédito Electrónica).
+          nullable: true
+        monId:
+          type: string
+          description: Código de moneda (FEParamGetTiposMonedas). PES = pesos.
+          nullable: true
+        monCotiz:
+          type: number
+          format: double
+        canMisMonExt:
+          type: string
+          description: '"S" si se cancela en la misma moneda extranjera, "N" si no
+            (sólo MonId distinto de PES).'
+          nullable: true
+        condicionIVAReceptorId:
+          type: integer
+          description: Condición frente al IVA del receptor (FEParamGetCondicionIvaReceptor).
+            Obligatorio (RG 5616).
+          format: int32
+          nullable: true
+        cbtesAsoc:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteAsociado'
+          nullable: true
+        tributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tributo'
+          nullable: true
+        iva:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlicuotaIva'
+          nullable: true
+        opcionales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opcional'
+          nullable: true
+        compradores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comprador'
+          nullable: true
+        periodoAsoc:
+          $ref: '#/components/schemas/PeriodoAsociado'
+        actividades:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        referenciaExterna:
+          maxLength: 100
+          type: string
+          description: Referencia propia del sistema consumidor (p.ej. número de pedido).
+            No se envía a ARCA; sirve para buscar emisiones.
+          nullable: true
+        cbteDesde:
+          type: integer
+          format: int64
+        cbteHasta:
+          type: integer
+          format: int64
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        resultado:
+          type: string
+          nullable: true
+        codAutorizacion:
+          type: string
+          description: CAE o CAEA.
+          nullable: true
+        emisionTipo:
+          type: string
+          description: CAE / CAEA.
+          nullable: true
+        fchVto:
+          type: string
+          nullable: true
+        fchProceso:
+          type: string
+          nullable: true
+        observaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+      additionalProperties: false
+      description: Resultado de FECompConsultar.
+    ComprobanteDetalle:
+      type: object
+      properties:
+        concepto:
+          maximum: 3
+          minimum: 1
+          type: integer
+          description: 1=Productos, 2=Servicios, 3=Productos y Servicios.
+          format: int32
+        docTipo:
+          type: integer
+          description: Tipo de documento del receptor (80=CUIT, 86=CUIL, 96=DNI, 99=Consumidor
+            Final sin identificar).
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        cbteFch:
+          type: string
+          description: Fecha del comprobante yyyyMMdd. Si se omite, ARCA usa la fecha
+            de proceso.
+          nullable: true
+        impTotal:
+          type: number
+          format: double
+        impTotConc:
+          type: number
+          format: double
+        impNeto:
+          type: number
+          format: double
+        impOpEx:
+          type: number
+          format: double
+        impTrib:
+          type: number
+          format: double
+        impIVA:
+          type: number
+          format: double
+        fchServDesde:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchServHasta:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchVtoPago:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3 (salvo Factura de
+            Crédito Electrónica).
+          nullable: true
+        monId:
+          type: string
+          description: Código de moneda (FEParamGetTiposMonedas). PES = pesos.
+          nullable: true
+        monCotiz:
+          type: number
+          format: double
+        canMisMonExt:
+          type: string
+          description: '"S" si se cancela en la misma moneda extranjera, "N" si no
+            (sólo MonId distinto de PES).'
+          nullable: true
+        condicionIVAReceptorId:
+          type: integer
+          description: Condición frente al IVA del receptor (FEParamGetCondicionIvaReceptor).
+            Obligatorio (RG 5616).
+          format: int32
+          nullable: true
+        cbtesAsoc:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteAsociado'
+          nullable: true
+        tributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tributo'
+          nullable: true
+        iva:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlicuotaIva'
+          nullable: true
+        opcionales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opcional'
+          nullable: true
+        compradores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comprador'
+          nullable: true
+        periodoAsoc:
+          $ref: '#/components/schemas/PeriodoAsociado'
+        actividades:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        referenciaExterna:
+          maxLength: 100
+          type: string
+          description: Referencia propia del sistema consumidor (p.ej. número de pedido).
+            No se envía a ARCA; sirve para buscar emisiones.
+          nullable: true
+      additionalProperties: false
+      description: Detalle de un comprobante (campos de FECAEDetRequest salvo la numeración).
+    ComprobanteNumerado:
+      type: object
+      properties:
+        concepto:
+          maximum: 3
+          minimum: 1
+          type: integer
+          description: 1=Productos, 2=Servicios, 3=Productos y Servicios.
+          format: int32
+        docTipo:
+          type: integer
+          description: Tipo de documento del receptor (80=CUIT, 86=CUIL, 96=DNI, 99=Consumidor
+            Final sin identificar).
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        cbteFch:
+          type: string
+          description: Fecha del comprobante yyyyMMdd. Si se omite, ARCA usa la fecha
+            de proceso.
+          nullable: true
+        impTotal:
+          type: number
+          format: double
+        impTotConc:
+          type: number
+          format: double
+        impNeto:
+          type: number
+          format: double
+        impOpEx:
+          type: number
+          format: double
+        impTrib:
+          type: number
+          format: double
+        impIVA:
+          type: number
+          format: double
+        fchServDesde:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchServHasta:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3.
+          nullable: true
+        fchVtoPago:
+          type: string
+          description: yyyyMMdd. Obligatorio si Concepto es 2 o 3 (salvo Factura de
+            Crédito Electrónica).
+          nullable: true
+        monId:
+          type: string
+          description: Código de moneda (FEParamGetTiposMonedas). PES = pesos.
+          nullable: true
+        monCotiz:
+          type: number
+          format: double
+        canMisMonExt:
+          type: string
+          description: '"S" si se cancela en la misma moneda extranjera, "N" si no
+            (sólo MonId distinto de PES).'
+          nullable: true
+        condicionIVAReceptorId:
+          type: integer
+          description: Condición frente al IVA del receptor (FEParamGetCondicionIvaReceptor).
+            Obligatorio (RG 5616).
+          format: int32
+          nullable: true
+        cbtesAsoc:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteAsociado'
+          nullable: true
+        tributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tributo'
+          nullable: true
+        iva:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlicuotaIva'
+          nullable: true
+        opcionales:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opcional'
+          nullable: true
+        compradores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comprador'
+          nullable: true
+        periodoAsoc:
+          $ref: '#/components/schemas/PeriodoAsociado'
+        actividades:
+          type: array
+          items:
+            type: integer
+            format: int32
+          nullable: true
+        referenciaExterna:
+          maxLength: 100
+          type: string
+          description: Referencia propia del sistema consumidor (p.ej. número de pedido).
+            No se envía a ARCA; sirve para buscar emisiones.
+          nullable: true
+        cbteDesde:
+          type: integer
+          format: int64
+        cbteHasta:
+          type: integer
+          format: int64
+      additionalProperties: false
+      description: Detalle con numeración explícita (uso directo de FECAESolicitar
+        / FECAEARegInformativo).
+    ConsultaEstados:
+      required:
+      - claves
+      type: object
+      properties:
+        claves:
+          maxItems: 200
+          minItems: 1
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    Contribuyente:
+      type: object
+      properties:
+        cuit:
+          type: integer
+          format: int64
+        tipoPersona:
+          type: string
+          nullable: true
+        estadoClave:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        apellido:
+          type: string
+          nullable: true
+        razonSocial:
+          type: string
+          nullable: true
+        domicilios:
+          type: array
+          items:
+            $ref: '#/components/schemas/DomicilioPadron'
+          nullable: true
+        denominacion:
+          type: string
+          description: 'Nombre para mostrar: razón social o "Apellido, Nombre".'
+          nullable: true
+          readOnly: true
+        activo:
+          type: boolean
+          readOnly: true
+        domicilioFiscal:
+          type: string
+          description: Domicilio fiscal en una línea (o el primero disponible).
+          nullable: true
+          readOnly: true
+      additionalProperties: false
+      description: Datos de un contribuyente según ws_sr_padron_a13 (getPersona).
+    Cotizacion:
+      type: object
+      properties:
+        monId:
+          type: string
+          nullable: true
+        monCotiz:
+          type: number
+          format: double
+        fchCotiz:
+          type: string
+          nullable: true
+      additionalProperties: false
+    DetalleRespuesta:
+      type: object
+      properties:
+        concepto:
+          type: integer
+          format: int32
+        docTipo:
+          type: integer
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        cbteDesde:
+          type: integer
+          format: int64
+        cbteHasta:
+          type: integer
+          format: int64
+        cbteFch:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          description: A=Aprobado, R=Rechazado.
+          nullable: true
+        cae:
+          type: string
+          description: CAE otorgado (o CAEA informado).
+          nullable: true
+        caeFchVto:
+          type: string
+          description: Vencimiento del CAE yyyyMMdd.
+          nullable: true
+        observaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+      additionalProperties: false
+    DomicilioPadron:
+      type: object
+      properties:
+        tipo:
+          type: string
+          nullable: true
+        direccion:
+          type: string
+          nullable: true
+        localidad:
+          type: string
+          nullable: true
+        codigoPostal:
+          type: string
+          nullable: true
+        provincia:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: Domicilio informado por el padrón.
+    EjecucionSuscripcion:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date
+        resultado:
+          type: string
+          nullable: true
+        cbteNro:
+          type: integer
+          format: int64
+          nullable: true
+        cae:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+      additionalProperties: false
+    EmisionDesdePlantilla:
+      type: object
+      properties:
+        importes:
+          $ref: '#/components/schemas/SolicitudCalculo'
+        docTipo:
+          type: integer
+          format: int32
+          nullable: true
+        docNro:
+          type: integer
+          format: int64
+          nullable: true
+        condicionIVAReceptorId:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
+      description: 'Datos para emitir desde una plantilla: importes nuevos y, opcionalmente,
+        otro receptor.'
+    EmitirComprobanteRequest:
+      required:
+      - comprobante
+      type: object
+      properties:
+        ptoVta:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          description: Punto de venta habilitado para web services (1-99998).
+          format: int32
+        cbteTipo:
+          maximum: 999
+          minimum: 1
+          type: integer
+          description: Tipo de comprobante (1=Factura A, 6=Factura B, 11=Factura C,
+            3=NC A, 8=NC B, 13=NC C, ...).
+          format: int32
+        comprobante:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+        receptorId:
+          type: string
+          description: 'Opcional: Id de un receptor de la agenda; completa DocTipo,
+            DocNro y CondicionIVAReceptorId.'
+          nullable: true
+      additionalProperties: false
+      description: Solicitud de emisión con numeración automática.
+      example:
+        ptoVta: 3
+        cbteTipo: 6
+        comprobante:
+          concepto: 1
+          docTipo: 99
+          docNro: 0
+          impTotal: 121
+          impNeto: 100
+          impIVA: 21
+          monId: PES
+          monCotiz: 1
+          condicionIVAReceptorId: 5
+          iva:
+          - id: 5
+            baseImp: 100
+            importe: 21
+    EntradaAuditoria:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        cliente:
+          type: string
+          nullable: true
+        operacion:
+          type: string
+          nullable: true
+        comprobante:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        cae:
+          type: string
+          nullable: true
+        importe:
+          type: number
+          format: double
+          nullable: true
+        correlationId:
+          type: string
+          nullable: true
+        detalle:
+          type: string
+          nullable: true
+        ip:
+          type: string
+          description: IP de origen.
+          nullable: true
+        agente:
+          type: string
+          description: User-Agent del llamador (recortado).
+          nullable: true
+        hash:
+          type: string
+          description: 'Hash encadenado: SHA-256(hash anterior + entrada). Permite
+            detectar alteraciones o borrados.'
+          nullable: true
+      additionalProperties: false
+      description: 'Entrada de auditoría: quién hizo qué, cuándo, desde dónde y con
+        qué resultado.'
+    EntregaWebhook:
+      type: object
+      properties:
+        fecha:
+          type: string
+          format: date-time
+        url:
+          type: string
+          nullable: true
+        evento:
+          type: string
+          nullable: true
+        comprobante:
+          type: string
+          nullable: true
+        intentos:
+          type: integer
+          format: int32
+        exitosa:
+          type: boolean
+        detalle:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: Entrega de un evento de webhook (para diagnóstico).
+    EstadisticasEmision:
+      type: object
+      properties:
+        autorizadas:
+          type: integer
+          format: int32
+        pendientes:
+          type: integer
+          format: int32
+        autorizadasHoy:
+          type: integer
+          format: int32
+        importeHoy:
+          type: number
+          format: double
+        porTipo:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+          nullable: true
+      additionalProperties: false
+      description: Resumen operativo del registro de emisiones.
+    EstadoEmision:
+      enum:
+      - Pendiente
+      - Autorizado
+      type: string
+    EstadoServidores:
+      type: object
+      properties:
+        appServer:
+          type: string
+          nullable: true
+        dbServer:
+          type: string
+          nullable: true
+        authServer:
+          type: string
+          nullable: true
+        todoOk:
+          type: boolean
+          readOnly: true
+      additionalProperties: false
+    InformeCaea:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        comprobantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteCaea'
+          nullable: true
+      additionalProperties: false
+      description: Lote para FECAEARegInformativo.
+    ItemLote:
+      required:
+      - comprobante
+      - idempotencyKey
+      type: object
+      properties:
+        idempotencyKey:
+          maxLength: 100
+          minLength: 1
+          type: string
+          description: Clave de idempotencia propia de este comprobante.
+        ptoVta:
+          maximum: 99998
+          minimum: 1
+          type: integer
+          format: int32
+        cbteTipo:
+          maximum: 999
+          minimum: 1
+          type: integer
+          format: int32
+        comprobante:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+      additionalProperties: false
+      description: Ítem de un lote de emisión.
+    LineaImporte:
+      type: object
+      properties:
+        neto:
+          type: number
+          description: Neto gravado de la línea (sin IVA).
+          format: double
+        alicuotaIvaId:
+          type: integer
+          description: Alícuota de IVA (3=0%, 4=10.5%, 5=21%, 6=27%, 8=5%, 9=2.5%).
+          format: int32
+        cantidad:
+          type: number
+          description: Cantidad (se usa junto con PrecioUnitario; si PrecioUnitario
+            es null se toma Neto).
+          format: double
+        precioUnitario:
+          type: number
+          description: Precio unitario. Si se informa, el importe de la línea es Cantidad
+            × PrecioUnitario.
+          format: double
+          nullable: true
+        bonificacionPorcentaje:
+          type: number
+          description: Bonificación porcentual de la línea (0-100).
+          format: double
+      additionalProperties: false
+      description: Línea para la calculadora de importes.
+    Opcional:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        valor:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ParametroItem:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        desc:
+          type: string
+          nullable: true
+        fchDesde:
+          type: string
+          nullable: true
+        fchHasta:
+          type: string
+          nullable: true
+        atributos:
+          type: object
+          additionalProperties:
+            type: string
+            nullable: true
+          nullable: true
+      additionalProperties: false
+      description: Ítem genérico de tabla de parámetros (Id/Desc/vigencia + atributos
+        adicionales).
+    Periodicidad:
+      enum:
+      - Semanal
+      - Quincenal
+      - Mensual
+      type: string
+    PeriodoAsociado:
+      type: object
+      properties:
+        fchDesde:
+          type: string
+          description: yyyyMMdd
+          nullable: true
+        fchHasta:
+          type: string
+          description: yyyyMMdd
+          nullable: true
+      additionalProperties: false
+    PlantillaComprobante:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identificador (letras, dígitos, guion y guion bajo; máx. 64).
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        comprobante:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+        actualizada:
+          type: string
+          format: date-time
+      additionalProperties: false
+      description: Plantilla de comprobante reutilizable (receptor, concepto, moneda,
+        condición IVA, opcionales, etc.).
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          format: int32
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+      additionalProperties: {}
+    Receptor:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        nombre:
+          type: string
+          nullable: true
+        docTipo:
+          type: integer
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        condicionIVAReceptorId:
+          type: integer
+          format: int32
+        email:
+          type: string
+          nullable: true
+        domicilio:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: Receptor frecuente (agenda de clientes del emisor).
+    RegistroEmision:
+      type: object
+      properties:
+        version:
+          type: integer
+          description: Versión del esquema del registro, para migraciones futuras.
+          format: int32
+        clave:
+          type: string
+          nullable: true
+        hash:
+          type: string
+          nullable: true
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        cbteNro:
+          type: integer
+          format: int64
+        estado:
+          $ref: '#/components/schemas/EstadoEmision'
+        resultado:
+          $ref: '#/components/schemas/ResultadoEmision'
+        creado:
+          type: string
+          format: date-time
+        detalle:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+        idempotencyKey:
+          type: string
+          description: Clave de idempotencia informada por el cliente (sin el prefijo
+            de cliente).
+          nullable: true
+        cliente:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: "Registro durable de una emisión, asociado a su clave de idempotencia.\r\
+        \n            Se escribe ANTES de llamar a FECAESolicitar para que un reintento\
+        \ reutilice el mismo número."
+    RegistroEmisionPagina:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int32
+        numeroPagina:
+          type: integer
+          format: int32
+        tamanoPagina:
+          type: integer
+          format: int32
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegistroEmision'
+          nullable: true
+      additionalProperties: false
+    RespuestaCae:
+      type: object
+      properties:
+        cabecera:
+          $ref: '#/components/schemas/CabeceraRespuesta'
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleRespuesta'
+          nullable: true
+        errores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+        eventos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+        aprobado:
+          type: boolean
+          readOnly: true
+      additionalProperties: false
+    ResultadoEmision:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        cbteNro:
+          type: integer
+          format: int64
+        resultado:
+          type: string
+          description: A=Aprobado, R=Rechazado.
+          nullable: true
+        cae:
+          type: string
+          nullable: true
+        caeFchVto:
+          type: string
+          description: yyyyMMdd
+          nullable: true
+        cbteFch:
+          type: string
+          nullable: true
+        observaciones:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+        errores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+        eventos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArcaMensaje'
+          nullable: true
+        reconciliado:
+          type: boolean
+          description: true si el CAE se recuperó mediante FECompConsultar tras un
+            resultado incierto.
+        advertencias:
+          type: array
+          items:
+            type: string
+          description: Advertencias de la validación local (no impidieron emitir).
+          nullable: true
+        referencia:
+          type: string
+          description: Referencia externa informada por el cliente (p.ej. número de
+            pedido).
+          nullable: true
+        qrUrl:
+          type: string
+          description: URL del código QR fiscal (RG 4892) para imprimir en el comprobante.
+          nullable: true
+        ayuda:
+          type: array
+          items:
+            type: string
+          description: Sugerencias de corrección para los errores/observaciones devueltos.
+          nullable: true
+        aprobado:
+          type: boolean
+          readOnly: true
+        numeroFormateado:
+          type: string
+          description: Número fiscal PPPPP-NNNNNNNN.
+          nullable: true
+          readOnly: true
+        descripcion:
+          type: string
+          description: Descripción legible, p.ej. "Factura B 00003-00000042".
+          nullable: true
+          readOnly: true
+      additionalProperties: false
+      description: Resultado de la emisión de un comprobante.
+    ResultadoItemLote:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          nullable: true
+        resultado:
+          $ref: '#/components/schemas/ResultadoEmision'
+        estado:
+          type: integer
+          format: int32
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        errores:
+          type: array
+          items:
+            type: string
+          nullable: true
+      additionalProperties: false
+      description: 'Resultado individual de un ítem del lote: o bien Resultado, o
+        bien Error.'
+    ResultadoValidacion:
+      type: object
+      properties:
+        valido:
+          type: boolean
+        errores:
+          type: array
+          items:
+            type: string
+          nullable: true
+        advertencias:
+          type: array
+          items:
+            type: string
+          nullable: true
+        normalizado:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+      additionalProperties: false
+      description: Resultado de la validación previa (sin emitir).
+    ResumenAlicuota:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        alicuota:
+          type: string
+          nullable: true
+        baseImponible:
+          type: number
+          format: double
+        impuesto:
+          type: number
+          format: double
+      additionalProperties: false
+    ResumenIva:
+      type: object
+      properties:
+        desde:
+          type: string
+          nullable: true
+        hasta:
+          type: string
+          nullable: true
+        comprobantes:
+          type: integer
+          format: int32
+        neto:
+          type: number
+          format: double
+        iva:
+          type: number
+          format: double
+        tributos:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+        alicuotas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResumenAlicuota'
+          nullable: true
+          readOnly: true
+      additionalProperties: false
+    SolicitudCae:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        comprobantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComprobanteNumerado'
+          nullable: true
+      additionalProperties: false
+      description: Lote para FECAESolicitar.
+    SolicitudCalculo:
+      type: object
+      properties:
+        cbteTipo:
+          type: integer
+          format: int32
+        lineas:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineaImporte'
+          nullable: true
+        noGravado:
+          type: number
+          format: double
+        exento:
+          type: number
+          format: double
+        tributos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tributo'
+          nullable: true
+        preciosConIvaIncluido:
+          type: boolean
+          description: 'true si los importes de las líneas incluyen IVA (típico en
+            ventas a consumidor final): se desglosa el neto.'
+      additionalProperties: false
+      example:
+        cbteTipo: 6
+        preciosConIvaIncluido: true
+        lineas:
+        - cantidad: 2
+          precioUnitario: 1210
+          alicuotaIvaId: 5
+          bonificacionPorcentaje: 10
+    SolicitudLote:
+      required:
+      - items
+      type: object
+      properties:
+        items:
+          maxItems: 500
+          minItems: 1
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemLote'
+      additionalProperties: false
+    Suscripcion:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        cliente:
+          type: string
+          nullable: true
+        descripcion:
+          type: string
+          nullable: true
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        comprobante:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+        periodicidad:
+          $ref: '#/components/schemas/Periodicidad'
+        proximaEjecucion:
+          type: string
+          format: date
+        diaAncla:
+          type: integer
+          description: Día ancla para la periodicidad mensual (se toma de la primera
+            ProximaEjecucion). Evita el corrimiento 31→28→28.
+          format: int32
+          nullable: true
+        hasta:
+          type: string
+          description: Fecha final opcional (inclusive).
+          format: date
+          nullable: true
+        activa:
+          type: boolean
+        retenida:
+          type: string
+          description: Si no es null, la suscripción está retenida y requiere acción
+            (p.ej. confirmar períodos atrasados).
+          nullable: true
+        atrasosConfirmadosHasta:
+          type: string
+          description: Los períodos atrasados hasta esta fecha (de período) fueron
+            confirmados para facturarse.
+          format: date
+          nullable: true
+        periodoEnCurso:
+          type: string
+          description: 'Período en curso y su detalle congelado: los reintentos reenvían
+            exactamente lo mismo (idempotencia determinista).'
+          format: date
+          nullable: true
+        detalleEnCurso:
+          $ref: '#/components/schemas/ComprobanteDetalle'
+        historial:
+          type: array
+          items:
+            $ref: '#/components/schemas/EjecucionSuscripcion'
+          nullable: true
+      additionalProperties: false
+      description: 'Facturación recurrente: emite automáticamente el comprobante en
+        cada período.'
+    Tributo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Código de tributo (FEParamGetTiposTributos).
+          format: int32
+        desc:
+          type: string
+          nullable: true
+        baseImp:
+          type: number
+          format: double
+        alic:
+          type: number
+          format: double
+        importe:
+          type: number
+          format: double
+      additionalProperties: false
+    UltimoComprobante:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        cbteTipo:
+          type: integer
+          format: int32
+        cbteNro:
+          type: integer
+          format: int64
+      additionalProperties: false
+    VentaPorDia:
+      type: object
+      properties:
+        fecha:
+          type: string
+          nullable: true
+        comprobantes:
+          type: integer
+          format: int32
+        total:
+          type: number
+          format: double
+      additionalProperties: false
+    VentaPorPuntoVenta:
+      type: object
+      properties:
+        ptoVta:
+          type: integer
+          format: int32
+        comprobantes:
+          type: integer
+          format: int32
+        total:
+          type: number
+          format: double
+        ultimoNumero:
+          type: integer
+          format: int64
+      additionalProperties: false
+    VentaPorReceptor:
+      type: object
+      properties:
+        docTipo:
+          type: integer
+          format: int32
+        docNro:
+          type: integer
+          format: int64
+        comprobantes:
+          type: integer
+          format: int32
+        total:
+          type: number
+          format: double
+      additionalProperties: false
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      description: Clave de API configurada en Seguridad:Clientes
+      name: X-Api-Key
+      in: header
+security:
+- ApiKey: []

@@ -1,0 +1,69 @@
+# Despliegue en Kubernetes. UNA réplica emisora (la numeración se serializa por proceso/servidor):
+# no escalar horizontalmente sin un registro y bloqueo distribuidos.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: arca-facturacion-datos }
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: { requests: { storage: 2Gi } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: arca-facturacion, labels: { app: arca-facturacion } }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }   # nunca dos instancias emitiendo a la vez
+  selector: { matchLabels: { app: arca-facturacion } }
+  template:
+    metadata:
+      labels: { app: arca-facturacion }
+      # /metrics NO es público: exige una clave con permiso admin (X-Api-Key o "Authorization: Bearer <clave>").
+      # El descubrimiento por anotaciones prometheus.io/* no permite enviar credenciales, así que queda desactivado
+      # (scrape: "false"); configurar un scrape_config/ServiceMonitor con la clave en un archivo, por ejemplo:
+      #   - job_name: arca-facturacion
+      #     metrics_path: /metrics
+      #     authorization: { type: Bearer, credentials_file: /etc/prometheus/secretos/arca-metricas }
+      #     kubernetes_sd_configs: [{ role: pod }]
+      #     relabel_configs: [{ source_labels: [__meta_kubernetes_pod_label_app], regex: arca-facturacion, action: keep }]
+      # Usar un cliente admin exclusivo para métricas, sin SecretoFirma y con IpsPermitidas acotadas a la red de Prometheus.
+      # No habilitar Api__MetricasPublicas: las métricas exponen volúmenes de negocio.
+      annotations: { prometheus.io/scrape: "false", prometheus.io/path: /metrics, prometheus.io/port: "8080" }
+    spec:
+      terminationGracePeriodSeconds: 100
+      securityContext: { runAsNonRoot: true, fsGroup: 1654 }
+      containers:
+        - name: api
+          image: arca-facturacion:1.3.0
+          ports: [{ containerPort: 8080 }]
+          env:
+            - { name: Arca__Ambiente, value: Homologacion }
+            - { name: Arca__Cuit, valueFrom: { secretKeyRef: { name: arca-facturacion, key: cuit } } }
+            - { name: Arca__CertificadoPassword_FILE, value: /secrets/cert_password }
+            - { name: Seguridad__Clientes__0__Nombre, value: erp }
+            - { name: Seguridad__Clientes__0__ClavesHash__0, valueFrom: { secretKeyRef: { name: arca-facturacion, key: hash_clave_erp } } }
+            # Rutas de datos en el volumen /data (la raíz del contenedor es de sólo lectura). Ya vienen en la imagen.
+            - { name: Arca__PlantillasPath, value: /data/plantillas }
+            - { name: Arca__ReceptoresPath, value: /data/receptores }
+            - { name: Arca__SuscripcionesPath, value: /data/suscripciones }
+            # Detrás de un Ingress/balanceador: red de los proxies (CIDR) para confiar en X-Forwarded-For.
+            # - { name: Api__RedesConfiables__0, value: 10.0.0.0/8 }
+          volumeMounts:
+            - { name: datos, mountPath: /data }
+            - { name: certs, mountPath: /certs, readOnly: true }
+            - { name: secretos, mountPath: /secrets, readOnly: true }
+          startupProbe: { httpGet: { path: /health/startup, port: 8080 }, failureThreshold: 30, periodSeconds: 2 }
+          livenessProbe: { httpGet: { path: /health/live, port: 8080 }, periodSeconds: 15 }
+          readinessProbe: { httpGet: { path: /health/ready, port: 8080 }, periodSeconds: 10 }
+          resources: { requests: { cpu: 100m, memory: 192Mi }, limits: { cpu: "1", memory: 512Mi } }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      volumes:
+        - { name: datos, persistentVolumeClaim: { claimName: arca-facturacion-datos } }
+        - { name: certs, secret: { secretName: arca-facturacion-certificado } }
+        - { name: secretos, secret: { secretName: arca-facturacion } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: arca-facturacion }
+spec:
+  selector: { app: arca-facturacion }
+  ports: [{ port: 80, targetPort: 8080 }]

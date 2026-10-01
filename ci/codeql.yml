@@ -1,0 +1,18 @@
+# Mover a .github/workflows/codeql.yml — análisis estático de seguridad.
+name: CodeQL
+on:
+  push: { branches: [ main ] }
+  pull_request:
+  schedule: [ { cron: '23 6 * * 1' } ]
+jobs:
+  analizar:
+    runs-on: ubuntu-latest
+    permissions: { security-events: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: '8.0.x' }
+      - uses: github/codeql-action/init@v3
+        with: { languages: csharp }
+      - run: dotnet build -c Release
+      - uses: github/codeql-action/analyze@v3

@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ERS Microservicio ARCA</title>
+<style>
+:root{--bg:#fbfaf7;--fg:#1d1f23;--mut:#5d636e;--line:#e3e0d8;--card:#fff;--acc:#1f5f8b;--crit:#b3261e;--alto:#b45309;--med:#8a6d00;--ok:#2e7d32}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15171a;--fg:#e8e6e1;--mut:#a1a6ad;--line:#2c3036;--card:#1c1f23;--acc:#6fb0dd;--crit:#ff8a80;--alto:#ffb74d;--med:#e6c84f;--ok:#81c784}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:2rem;margin:0 0 4px}h2{margin-top:2.4em;border-bottom:1px solid var(--line);padding-bottom:6px}h3{margin-top:1.6em}
+.sub{color:var(--mut)}
+nav{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:20px 0}
+nav ol{margin:0;padding-left:20px;columns:2}@media(max-width:640px){nav ol{columns:1}}
+a{color:var(--acc)}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:.93rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+th{background:var(--card)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font-size:.85rem}
+.tag{display:inline-block;font-size:.75rem;font-weight:600;padding:1px 8px;border-radius:99px;border:1px solid currentColor}
+.c{color:var(--crit)}.a{color:var(--alto)}.m{color:var(--med)}.ok{color:var(--ok)}
+.box{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:8px;padding:10px 14px;margin:14px 0}
+</style>
+</head>
+<body><main>
+<h1>Especificación de Requerimientos de Software</h1>
+<div class="sub">Microservicio de Facturación Electrónica ARCA (ex AFIP) · C# / .NET 8 · versión 1.3 · 01/10/2026</div>
+
+<nav><ol>
+<li><a href="#intro">Introducción y alcance</a></li>
+<li><a href="#arq">Arquitectura</a></li>
+<li><a href="#ws">Métodos de ARCA implementados</a></li>
+<li><a href="#rf">Requerimientos funcionales</a></li>
+<li><a href="#val">Reglas de validación</a></li>
+<li><a href="#emision">Flujo de emisión segura</a></li>
+<li><a href="#rnf">Requerimientos no funcionales</a></li>
+<li><a href="#api">API REST</a></li>
+<li><a href="#errores">Errores</a></li>
+<li><a href="#config">Configuración</a></li>
+<li><a href="#pruebas">Pruebas</a></li>
+<li><a href="#revision">Revisión adversaria</a></li>
+<li><a href="#limites">Limitaciones y pendientes</a></li>
+<li><a href="#mejoras">Versión 1.1: 50 mejoras</a></li>
+<li><a href="#mejoras2">Versión 1.2: 50 mejoras adicionales</a></li>
+<li><a href="#runbook">Guía de operación</a></li>
+<li><a href="#mejoras3">Versión 1.3: 150 mejoras</a></li>
+<li><a href="#secuencia">Secuencia de la emisión</a></li>
+<li><a href="#glosario">Glosario</a></li>
+<li><a href="#faq">Preguntas frecuentes</a></li>
+<li><a href="#errores-catalogo">Códigos de error</a></li>
+<li><a href="#migracion">Actualización a 1.3</a></li>
+<li><a href="#curl">Ejemplos curl</a></li>
+<li><a href="#mejoras4">Versión 1.4</a></li>
+<li><a href="#migracion14">Actualización a 1.4</a></li>
+<li><a href="#revision141">Revisión 1.4.1</a></li>
+</ol></nav>
+
+<h2 id="intro">1. Introducción y alcance</h2>
+<p>El microservicio expone una API REST que encapsula la integración con los web services SOAP de ARCA para factura electrónica:</p>
+<ul>
+<li><b>WSAA</b> (autenticación): genera el TRA, lo firma en CMS/PKCS#7 con el certificado del emisor y obtiene el Ticket de Acceso (token + sign).</li>
+<li><b>WSFEv1</b> (factura electrónica, RG 4291 y modificatorias, incluida RG 5616): obtención de CAE y CAEA, consultas y tablas de parámetros.</li>
+</ul>
+<p>Fuera de alcance: generación del PDF/QR del comprobante, WSMTXCA (con detalle de ítems), WSFEX (exportación), WSBFE (bonos fiscales) y persistencia contable.</p>
+
+<h2 id="arq">2. Arquitectura</h2>
+<table>
+<tr><th>Proyecto</th><th>Responsabilidad</th></tr>
+<tr><td><code>Arca.Facturacion.Core</code></td><td>Cliente SOAP propio (<code>SoapInvoker</code>), WSAA (<code>TraBuilder</code>, <code>CertificadoCmsFirmante</code>, <code>WsaaClient</code>, <code>TicketAccesoProvider</code>), WSFEv1 (<code>WsfeClient</code>, modelos), validación (<code>ComprobanteValidator</code>, <code>Cuit</code>), orquestación (<code>FacturacionService</code>, <code>RegistroEmisiones</code>).</td></tr>
+<tr><td><code>Arca.Facturacion.Api</code></td><td>ASP.NET Core: controladores REST, autenticación por API key, ProblemDetails, rate limiting, Swagger/OpenAPI.</td></tr>
+<tr><td><code>Arca.Facturacion.Tests</code></td><td>xUnit: 251 pruebas unitarias y de integración (WebApplicationFactory).</td></tr>
+</table>
+<p>Se eligió un cliente SOAP mínimo sobre <code>HttpClient</code> + <code>XElement</code> en vez de proxies WCF generados: menos dependencias, control exacto del orden de elementos del esquema, escapado automático y parser con DTD prohibido.</p>
+<pre>Cliente ──REST/JSON──▶ API (X-Api-Key, rate limit) ──▶ FacturacionService
+                                                      ├─ ComprobanteValidator
+                                                      ├─ RegistroEmisiones (disco)
+                                                      └─ WsfeClient ──SOAP──▶ WSFEv1
+                                                            └─ TicketAccesoProvider ──▶ WsaaClient ──SOAP──▶ WSAA</pre>
+
+<h2 id="ws">3. Métodos de ARCA implementados</h2>
+<table>
+<tr><th>Servicio</th><th>Método</th><th>Endpoint REST</th></tr>
+<tr><td>WSAA</td><td>loginCms</td><td>interno (caché de TA)</td></tr>
+<tr><td>WSFEv1</td><td>FEDummy</td><td><code>GET /api/v1/salud/arca</code></td></tr>
+<tr><td></td><td>FECAESolicitar</td><td><code>POST /api/v1/comprobantes</code> (numeración automática) · <code>POST /api/v1/comprobantes/cae</code> (directo, deshabilitado por defecto)</td></tr>
+<tr><td></td><td>FECompUltimoAutorizado</td><td><code>GET /api/v1/comprobantes/ultimo</code></td></tr>
+<tr><td></td><td>FECompConsultar</td><td><code>GET /api/v1/comprobantes/{ptoVta}/{cbteTipo}/{cbteNro}</code></td></tr>
+<tr><td></td><td>FECompTotXRequest</td><td><code>GET /api/v1/comprobantes/max-registros</code></td></tr>
+<tr><td></td><td>FECAEASolicitar / FECAEAConsultar</td><td><code>POST|GET /api/v1/caea/{periodo}/{orden}</code></td></tr>
+<tr><td></td><td>FECAEARegInformativo</td><td><code>POST /api/v1/caea/comprobantes</code></td></tr>
+<tr><td></td><td>FECAEASinMovimientoInformar / Consultar</td><td><code>POST|GET /api/v1/caea/{caea}/sin-movimiento/{ptoVta}</code></td></tr>
+<tr><td></td><td>FEParamGetTiposCbte, TiposConcepto, TiposDoc, TiposIva, TiposMonedas, TiposOpcional, TiposTributos, TiposPaises, PtosVenta, Actividades</td><td><code>GET /api/v1/parametros/…</code></td></tr>
+<tr><td></td><td>FEParamGetCondicionIvaReceptor (RG 5616)</td><td><code>GET /api/v1/parametros/condiciones-iva-receptor?claseCmp=A</code></td></tr>
+<tr><td></td><td>FEParamGetCotizacion</td><td><code>GET /api/v1/parametros/cotizacion/{monId}?fecha=yyyyMMdd</code></td></tr>
+</table>
+<div class="box">El orden de elementos de <code>FECAEDetRequest</code> / <code>FECAEADetRequest</code> se verificó contra el WSDL de homologación: … MonId, MonCotiz, <b>CanMisMonExt, CondicionIVAReceptorId</b>, CbtesAsoc, Tributos, Iva, Opcionales, Compradores, PeriodoAsoc, Actividades (+ CAEA, CbteFchHsGen en CAEA).</div>
+
+<h2 id="rf">4. Requerimientos funcionales</h2>
+<table>
+<tr><th>ID</th><th>Requerimiento</th><th>Prioridad</th></tr>
+<tr><td>RF-01</td><td>Autenticar contra WSAA firmando el TRA (SHA-256, CMS con certificado embebido) y cachear el TA hasta su vencimiento menos un margen configurable.</td><td>Alta</td></tr>
+<tr><td>RF-02</td><td>Persistir el TA en disco (permisos 0600) para sobrevivir reinicios, ya que WSAA rechaza un nuevo login mientras exista un TA vigente.</td><td>Alta</td></tr>
+<tr><td>RF-03</td><td>Ante error 600 de WSFE, marcar el TA como sospechoso, reloguear y reintentar una vez; si WSAA responde <code>alreadyAuthenticated</code>, conservar el TA vigente.</td><td>Alta</td></tr>
+<tr><td>RF-04</td><td>Emitir comprobantes con numeración automática (último autorizado + 1), serializada por (punto de venta, tipo).</td><td>Alta</td></tr>
+<tr><td>RF-05</td><td>Exigir <code>Idempotency-Key</code> en la emisión; un reintento con la misma clave nunca genera un segundo comprobante.</td><td>Alta</td></tr>
+<tr><td>RF-06</td><td>Ante resultado incierto (timeout, HTTP 5xx, SOAP Fault) reconciliar con FECompConsultar antes de informar al llamador.</td><td>Alta</td></tr>
+<tr><td>RF-07</td><td>Validar localmente el comprobante antes de enviarlo (sección 5).</td><td>Alta</td></tr>
+<tr><td>RF-08</td><td>Exponer todos los métodos de WSFEv1 listados en la sección 3.</td><td>Alta</td></tr>
+<tr><td>RF-09</td><td>Informar el estado de los servidores de ARCA (FEDummy) y un health check propio (<code>/health</code>).</td><td>Media</td></tr>
+<tr><td>RF-10</td><td>Publicar documentación OpenAPI 3 (Swagger UI en Development; <code>docs/openapi.json|yaml</code>).</td><td>Media</td></tr>
+</table>
+
+<h2 id="val">5. Reglas de validación local</h2>
+<table>
+<tr><th>Área</th><th>Regla</th></tr>
+<tr><td>Identificación</td><td>PtoVta 1–99998; CbteTipo conocido de WSFEv1; Concepto 1/2/3; CUIT/CUIL del receptor con dígito verificador (módulo 11); DocTipo 99 ⇒ DocNro 0; clase A ⇒ receptor con CUIT; CondicionIVAReceptorId obligatorio (RG 5616).</td></tr>
+<tr><td>Fechas</td><td>Formato yyyyMMdd; CbteFch dentro de ±5 días (productos) o ±10 días (servicios) respecto de hoy en hora argentina; servicios exigen FchServDesde ≤ FchServHasta y FchVtoPago (salvo FCE). La ventana no se aplica a comprobantes CAEA informados a posteriori.</td></tr>
+<tr><td>Importes</td><td>No negativos, máximo 2 decimales, ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA (tolerancia configurable, 0,01 por defecto); ImpTotal &gt; 0 salvo NC/ND.</td></tr>
+<tr><td>IVA</td><td>Clase C sin IVA, ImpTotConc ni ImpOpEx; A/B/M con neto ⇒ detalle de alícuotas; Σ BaseImp = ImpNeto, Σ Importe = ImpIVA; alícuotas 3,4,5,6,8,9 sin repetir; Importe ≈ BaseImp × tasa.</td></tr>
+<tr><td>Tributos / moneda</td><td>Σ Tributos = ImpTrib; PES ⇒ cotización 1 y sin CanMisMonExt; extranjera ⇒ cotización &gt; 0 y CanMisMonExt S/N.</td></tr>
+<tr><td>Asociados</td><td>NC/ND requieren CbtesAsoc o PeriodoAsoc (excluyentes); Compradores suman 100 %; máximo 50 elementos por lista.</td></tr>
+</table>
+
+<h2 id="emision">6. Flujo de emisión segura</h2>
+<ol>
+<li>Buscar la <code>Idempotency-Key</code> (aislada por cliente) en el registro durable. Si está autorizada, devolver el resultado guardado; si el contenido difiere, 409.</li>
+<li>Validar (sólo si no hay registro previo).</li>
+<li>Tomar el semáforo de (PtoVta, CbteTipo). Consultar el último autorizado, reservar N = último + 1 y <b>persistir el registro como Pendiente antes de llamar a ARCA</b>.</li>
+<li>Invocar FECAESolicitar.
+ <ul>
+ <li><b>Aprobado:</b> guardar como Autorizado.</li>
+ <li><b>Rechazado:</b> liberar la clave (ARCA no consumió el número).</li>
+ <li><b>10016</b> (número no correlativo): verificar si N ya es nuestro; si no, renumerar una sola vez; si vuelve a fallar, pedir revisión manual.</li>
+ <li><b>Incierto:</b> consultar N con esperas (0, 3, 10 s). Si existe y coinciden todos los datos (documento, importes, fecha, moneda, alícuotas), se adopta su CAE (<code>Reconciliado = true</code>). Si no aparece, 503 con indicación de reintentar con la misma clave.</li>
+ </ul></li>
+<li>Un reintento sobre un registro Pendiente consulta N y, si no existe, reenvía <b>el mismo N</b>; nunca uno nuevo.</li>
+</ol>
+
+<h2 id="rnf">7. Requerimientos no funcionales</h2>
+<table>
+<tr><th>ID</th><th>Requerimiento</th></tr>
+<tr><td>RNF-01 Seguridad</td><td>API key por cabecera <code>X-Api-Key</code>, comparación en tiempo constante, cerrado por defecto (sin claves configuradas, todo es 401). Contraseña del certificado sólo vía secreto o variable de entorno. Swagger deshabilitado fuera de Development.</td></tr>
+<tr><td>RNF-02 XML</td><td>Parser con DTD prohibido (sin XXE), respuestas limitadas a 20 MB (también si llegan sin Content-Length), escapado automático de valores.</td></tr>
+<tr><td>RNF-03 Disponibilidad</td><td>Rate limit de 120 solicitudes por minuto por cliente (o por IP sin clave), aplicado antes de la autenticación; body máximo de 512 KB; timeout configurable por llamada a ARCA.</td></tr>
+<tr><td>RNF-04 Exactitud</td><td>Importes <code>decimal</code> serializados con cultura invariante (punto decimal) sin importar la cultura del servidor.</td></tr>
+<tr><td>RNF-05 Observabilidad</td><td>Logs estructurados sin token ni sign; traceId en cada ProblemDetails; los errores 5xx no exponen rutas ni mensajes internos.</td></tr>
+<tr><td>RNF-06 Portabilidad</td><td>.NET 8 en Windows o Linux; el certificado se carga con EphemeralKeySet en Linux.</td></tr>
+</table>
+
+<h2 id="api">8. API REST — ejemplo de emisión</h2>
+<pre>POST /api/v1/comprobantes
+X-Api-Key: ********
+Idempotency-Key: 6f1c2b0e-7d3a-4c9e-9b51-1a2b3c4d5e6f
+Content-Type: application/json
+
+{ "ptoVta": 3, "cbteTipo": 6,
+  "comprobante": { "concepto": 1, "docTipo": 99, "docNro": 0, "cbteFch": "20260930",
+    "impTotal": 121, "impNeto": 100, "impIVA": 21, "monId": "PES", "monCotiz": 1,
+    "condicionIVAReceptorId": 5, "iva": [ { "id": 5, "baseImp": 100, "importe": 21 } ] } }
+
+200 OK
+{ "ptoVta": 3, "cbteTipo": 6, "cbteNro": 42, "resultado": "A", "cae": "76123456789012",
+  "caeFchVto": "20261010", "observaciones": [], "reconciliado": false, "aprobado": true }</pre>
+<p>Contrato completo en <code>openapi.json</code>, <code>openapi.yaml</code> y <code>swagger.html</code>.</p>
+
+<h2 id="errores">9. Errores (RFC 7807 ProblemDetails)</h2>
+<table>
+<tr><th>HTTP</th><th>Causa</th><th>Acción del llamador</th></tr>
+<tr><td>400</td><td>Validación local, Idempotency-Key ausente, parámetros inválidos</td><td>Corregir (lista en <code>errores</code>)</td></tr>
+<tr><td>401</td><td>API key ausente o inválida</td><td>—</td></tr>
+<tr><td>403</td><td>Endpoint directo <code>/cae</code> deshabilitado</td><td>Usar <code>POST /comprobantes</code></td></tr>
+<tr><td>409</td><td>Idempotency-Key reutilizada con otro contenido</td><td>Usar una clave nueva</td></tr>
+<tr><td>422</td><td>Error de negocio de ARCA o numeración en conflicto</td><td>Revisar los códigos de ARCA</td></tr>
+<tr><td>429</td><td>Rate limit</td><td>Esperar</td></tr>
+<tr><td>502</td><td>Falla de WSAA o SOAP Fault técnico</td><td>Revisar logs (traceId)</td></tr>
+<tr><td>503</td><td>ARCA no disponible o resultado no confirmado</td><td><b>Reintentar con la misma Idempotency-Key</b></td></tr>
+</table>
+
+<h2 id="config">10. Configuración (<code>appsettings.json</code>, sección <code>Arca</code>)</h2>
+<table>
+<tr><th>Clave</th><th>Defecto</th><th>Descripción</th></tr>
+<tr><td>Ambiente</td><td>Homologacion</td><td><code>Homologacion</code> (wsaahomo/wswhomo) o <code>Real</code> (wsaa/servicios1)</td></tr>
+<tr><td>Cuit</td><td>—</td><td>CUIT del emisor, validada al arrancar</td></tr>
+<tr><td>CertificadoPath / CertificadoPassword</td><td>—</td><td>.pfx con clave privada; la contraseña va por <code>Arca__CertificadoPassword</code></td></tr>
+<tr><td>CacheTicketPath</td><td>data/ta</td><td>Persistencia del TA</td></tr>
+<tr><td>RegistroEmisionesPath</td><td>data/emisiones</td><td>Registro durable de idempotencia (obligatorio en uso real)</td></tr>
+<tr><td>PermitirSolicitudDirecta</td><td>false</td><td>Habilita <code>POST /comprobantes/cae</code></td></tr>
+<tr><td>ToleranciaImportes</td><td>0.01</td><td>Tolerancia de sumas e IVA</td></tr>
+<tr><td>ReconciliacionEsperasSegundos</td><td>[0,3,10]</td><td>Esperas entre consultas de reconciliación</td></tr>
+<tr><td>TimeoutSegundos / MargenRenovacionTicketMinutos</td><td>60 / 10</td><td>—</td></tr>
+<tr><td>Seguridad:ApiKeys</td><td>[]</td><td>Claves válidas (por variables de entorno <code>Seguridad__ApiKeys__0</code>…)</td></tr>
+</table>
+<p>Para obtener el certificado de homologación: generar la clave y el CSR con OpenSSL, crear el certificado en WSASS (“Autogestión certificados Homologación”), asociarlo al servicio <code>wsfe</code> y empaquetarlo como .pfx (<code>openssl pkcs12 -export</code>).</p>
+
+<h2 id="pruebas">11. Pruebas</h2>
+<p><span class="tag ok">153 / 153 OK</span> con <code>dotnet test</code>.</p>
+<table>
+<tr><th>Suite</th><th>Cobertura</th></tr>
+<tr><td>WsaaTests</td><td>TRA, firma CMS verificable, certificado vencido o inexistente, loginCms, fault alreadyAuthenticated, caché concurrente (un solo login), renovación por margen, persistencia 0600, archivo corrupto, TA conservado tras 600 + alreadyAuthenticated.</td></tr>
+<tr><td>WsfeClientTests</td><td>Orden de esquema, Auth, cultura es-AR, escapado anti-inyección, reintento 600 sin bucle, 602, FEDummy sin Auth, todos los FEParamGet*, CAEA completo, SOAP Fault, HTML 502, timeout vs. cancelación, XXE.</td></tr>
+<tr><td>ValidacionTests</td><td>CUIT y más de 30 reglas de comprobante.</td></tr>
+<tr><td>FacturacionServiceTests</td><td>Numeración, 50 emisiones concurrentes sin huecos, reconciliación (timeout, SOAP Fault, datos distintos, estado desconocido), grabación tardía + reintento = un solo CAE, reenvío del mismo número, 10016, idempotencia (concurrente, conflicto, aislamiento por cliente, reintento días después), registro en disco.</td></tr>
+<tr><td>ApiTests</td><td>401, health/swagger, emisión 200, 400 con errores, falta de Idempotency-Key, 404, /cae deshabilitado (403), parámetros.</td></tr>
+</table>
+
+<h2 id="revision">12. Revisión adversaria</h2>
+<p>Un revisor independiente auditó el código buscando romperlo (conformidad con ARCA, dinero y numeración, seguridad, robustez). Hallazgos y estado:</p>
+<table>
+<tr><th>Sev.</th><th>Hallazgo</th><th>Estado</th></tr>
+<tr><td><span class="tag c">Crítico</span></td><td>Doble emisión: tras un timeout, el reintento con la misma clave tomaba un número nuevo.</td><td class="ok">Corregido: registro Pendiente durable antes del envío y reenvío del mismo número.</td></tr>
+<tr><td><span class="tag c">Crítico</span></td><td>Se podía emitir sin Idempotency-Key.</td><td class="ok">Corregido: obligatoria.</td></tr>
+<tr><td><span class="tag a">Alto</span></td><td>Invalidar el TA ante un 600 podía bloquear el servicio hasta 12 h (alreadyAuthenticated); <code>Wait()</code> sincrónico.</td><td class="ok">Corregido: TA “sospechoso” que se conserva si WSAA confirma que sigue vigente; sin bloqueo sincrónico.</td></tr>
+<tr><td><span class="tag a">Alto</span></td><td>La reconciliación comparaba sólo documento e importe total.</td><td class="ok">Corregido: compara concepto, todos los importes, fecha, moneda, condición IVA y alícuotas.</td></tr>
+<tr><td><span class="tag a">Alto</span></td><td>Un SOAP Fault en FECAESolicitar se trataba como rechazo definitivo.</td><td class="ok">Corregido: se trata como incierto y se reconcilia.</td></tr>
+<tr><td><span class="tag a">Alto</span></td><td><code>/comprobantes/cae</code> evitaba lock, idempotencia y reconciliación.</td><td class="ok">Mitigado: deshabilitado por defecto y documentado.</td></tr>
+<tr><td><span class="tag a">Alto</span></td><td>Varias réplicas: el lock es por proceso.</td><td class="m">Abierto: requisito de despliegue (una réplica emisora por punto de venta). Ver sección 13.</td></tr>
+<tr><td><span class="tag m">Medio</span></td><td>Idempotencia en memoria: entradas envenenadas, sin límite, sin aislamiento por cliente, resultados transitorios cacheados 24 h, validación antes de la búsqueda.</td><td class="ok">Corregido: registro durable por cliente, sólo se guardan los autorizados, búsqueda antes de validar.</td></tr>
+<tr><td><span class="tag m">Medio</span></td><td>Tolerancia de IVA fija; listas y lotes CAEA sin tope; Swagger público.</td><td class="ok">Corregido: tolerancia configurable, topes (50 por lista, 250 por lote, body de 512 KB), Swagger sólo en Development.</td></tr>
+<tr><td><span class="tag m">Bajo</span></td><td>Lectura sin tope con chunked; 401 sin rate limit; detalles internos en 5xx; FECompConsultar incompleto; permisos del directorio del TA.</td><td class="ok">Corregido.</td></tr>
+<tr><td><span class="tag m">Bajo</span></td><td>Validaciones que ARCA igual rechaza (CondicionIVAReceptor según clase, tope de consumidor final, opcionales FCE); alerta de vencimiento del certificado.</td><td class="m">Abierto: ARCA lo rechaza con su código; mejora futura.</td></tr>
+</table>
+
+<h2 id="limites">13. Limitaciones y pendientes</h2>
+<ul>
+<li><b>Una sola instancia emisora por punto de venta.</b> Para escalar horizontalmente, reemplazar el semáforo y <code>RegistroEmisionesArchivo</code> por un lock y almacén distribuidos (por ejemplo MySQL con <code>SELECT … FOR UPDATE</code> o Redis), detrás de la interfaz <code>IRegistroEmisiones</code>.</li>
+<li>No se probó contra el homologador real de ARCA (no hay certificado disponible): las respuestas se simulan con XML real del esquema. Es el primer paso pendiente de la puesta en marcha.</li>
+<li>Los códigos 600/602/10016, las ventanas de fecha y el TA de 12 h salen del manual del desarrollador; el orden de elementos se verificó contra el WSDL.</li>
+<li>Un solo CUIT emisor por instancia.</li>
+</ul>
+
+<h2 id="mejoras">14. Versión 1.1: 50 mejoras</h2>
+<p>Todas están cubiertas por pruebas (<span class="tag ok">153 / 153 OK</span>) y el build compila sin advertencias con los analizadores de .NET en modo recomendado.</p>
+<table>
+<tr><th>#</th><th>Área</th><th>Mejora</th><th>Dónde</th></tr>
+<tr><td>1</td><td>Resiliencia</td><td>Caché de tablas FEParamGet* (TTL configurable, 12 h por defecto)</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>2</td><td>Resiliencia</td><td>Caché de cotizaciones por moneda y fecha (10 min)</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>3</td><td>Resiliencia</td><td>Reintentos con backoff sólo en operaciones de lectura</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>4</td><td>Resiliencia</td><td>Las operaciones que generan comprobantes nunca se reintentan a ciegas</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>5</td><td>Resiliencia</td><td>Circuit breaker hacia ARCA (falla rápida y recuperación semiabierta)</td><td><code>CircuitBreaker</code></td></tr>
+<tr><td>6</td><td>Resiliencia</td><td>Los errores de negocio no abren el circuito</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>7</td><td>Resiliencia</td><td>Carga diferida del certificado: el servicio arranca y reporta el problema en lugar de caerse</td><td><code>FirmanteDiferido</code></td></tr>
+<tr><td>8</td><td>Resiliencia</td><td>Renovación proactiva y precarga del TA en segundo plano</td><td><code>RenovadorTicketHostedService</code></td></tr>
+<tr><td>9</td><td>Resiliencia</td><td>Reconciliador automático de emisiones pendientes</td><td><code>ReconciliadorHostedService</code></td></tr>
+<tr><td>10</td><td>Resiliencia</td><td>Retención y purga del registro de emisiones (90 días)</td><td><code>FacturacionService.Purgar</code></td></tr>
+<tr><td>11</td><td>Observabilidad</td><td>Métricas: llamadas, duración, emisiones, reconciliaciones, aperturas del circuito, aciertos de caché</td><td><code>ArcaTelemetria</code></td></tr>
+<tr><td>12</td><td>Observabilidad</td><td>Trazas distribuidas por llamada a ARCA (ActivitySource, compatible con OpenTelemetry)</td><td><code>ArcaTelemetria</code></td></tr>
+<tr><td>13</td><td>Observabilidad</td><td>Detección del desfasaje de reloj con ARCA (cabecera Date)</td><td><code>EstadoArca</code></td></tr>
+<tr><td>14</td><td>Observabilidad</td><td>Correlation-ID (X-Correlation-Id) propagado a logs y respuestas</td><td><code>CabecerasMiddleware</code></td></tr>
+<tr><td>15</td><td>Observabilidad</td><td>Logs HTTP con duración y sin cabeceras sensibles</td><td><code>HttpLogging</code></td></tr>
+<tr><td>16</td><td>Observabilidad</td><td>Logs en JSON opcionales para agregadores</td><td><code>Logging:Json</code></td></tr>
+<tr><td>17</td><td>Observabilidad</td><td>Health checks separados: /health/live y /health/ready</td><td><code>Program</code></td></tr>
+<tr><td>18</td><td>Observabilidad</td><td>Health check del certificado: degradado si vence en menos de 30 días</td><td><code>CertificadoHealthCheck</code></td></tr>
+<tr><td>19</td><td>Observabilidad</td><td>Health check del registro de emisiones (escritura)</td><td><code>RegistroHealthCheck</code></td></tr>
+<tr><td>20</td><td>Observabilidad</td><td>Health check del canal con ARCA (circuito y reloj)</td><td><code>ArcaHealthCheck</code></td></tr>
+<tr><td>21</td><td>Observabilidad</td><td>Endpoint /api/v1/info: versión, ambiente, CUIT enmascarada, vencimiento del certificado</td><td><code>InfoController</code></td></tr>
+<tr><td>22</td><td>Funcional</td><td>QR fiscal (RG 4892) incluido en cada emisión aprobada</td><td><code>QrFiscal</code></td></tr>
+<tr><td>23</td><td>Funcional</td><td>Endpoint del QR de un comprobante ya emitido</td><td><code>GET …/{nro}/qr</code></td></tr>
+<tr><td>24</td><td>Funcional</td><td>Emisión por lote de hasta 50 comprobantes con resultado individual</td><td><code>POST /comprobantes/lote</code></td></tr>
+<tr><td>25</td><td>Funcional</td><td>Calculadora de importes: IVA por alícuota, redondeo y totales</td><td><code>POST /comprobantes/calcular</code></td></tr>
+<tr><td>26</td><td>Funcional</td><td>Anulación con Nota de Crédito automática asociada al original</td><td><code>POST …/nota-credito</code></td></tr>
+<tr><td>27</td><td>Funcional</td><td>Consulta del estado de una emisión por Idempotency-Key</td><td><code>GET /comprobantes/emisiones/{key}</code></td></tr>
+<tr><td>28</td><td>Funcional</td><td>Fecha del comprobante automática (hora argentina) si no se informa</td><td><code>FacturacionService</code></td></tr>
+<tr><td>29</td><td>Funcional</td><td>Cotización automática desde ARCA para moneda extranjera</td><td><code>FacturacionService</code></td></tr>
+<tr><td>30</td><td>Funcional</td><td>El detalle enviado se persiste: los reenvíos son idénticos aunque cambie el día</td><td><code>RegistroEmision.Detalle</code></td></tr>
+<tr><td>31</td><td>Funcional</td><td>Notificación por webhook de cada comprobante autorizado</td><td><code>WebhookNotificador</code></td></tr>
+<tr><td>32</td><td>Funcional</td><td>Webhook firmado con HMAC-SHA256 y reintentos con espera creciente</td><td><code>WebhookNotificador</code></td></tr>
+<tr><td>33</td><td>Funcional</td><td>Sugerencias de corrección para errores conocidos de ARCA (campo ayuda)</td><td><code>CatalogoErroresArca</code></td></tr>
+<tr><td>34</td><td>Validación</td><td>Condición IVA del receptor válida y coherente con la clase A/M (RG 5616)</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>35</td><td>Validación</td><td>Tope configurable de consumidor final sin identificar</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>36</td><td>Validación</td><td>FCE MiPyME exige el opcional CBU o alias</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>37</td><td>Validación</td><td>Validación opcional contra ARCA: punto de venta habilitado y no bloqueado</td><td><code>ValidarContraTablasArca</code></td></tr>
+<tr><td>38</td><td>Validación</td><td>Validación opcional contra ARCA: moneda existente</td><td><code>ValidarContraTablasArca</code></td></tr>
+<tr><td>39</td><td>Seguridad</td><td>Clientes con nombre y varias claves: rotación sin cortes y sin perder la idempotencia</td><td><code>DirectorioClientes</code></td></tr>
+<tr><td>40</td><td>Seguridad</td><td>Permisos por cliente: emitir, consultar y admin</td><td><code>RequierePermisoAttribute</code></td></tr>
+<tr><td>41</td><td>Seguridad</td><td>Cabeceras de seguridad (nosniff, DENY, CSP, no-store) y sin cabecera Server</td><td><code>CabecerasMiddleware</code></td></tr>
+<tr><td>42</td><td>Seguridad</td><td>HTTPS forzado y HSTS opcionales</td><td><code>Api:ForzarHttps</code></td></tr>
+<tr><td>43</td><td>Seguridad</td><td>Soporte de proxy inverso (X-Forwarded-For) con proxies de confianza</td><td><code>ForwardedHeaders</code></td></tr>
+<tr><td>44</td><td>Operación</td><td>Endpoints admin: pendientes, reconciliar, estadísticas y limpieza de caché</td><td><code>AdminController</code></td></tr>
+<tr><td>45</td><td>Operación</td><td>Rate limit, tamaño máximo del body y concurrencia de emisión configurables</td><td><code>Api:*</code></td></tr>
+<tr><td>46</td><td>Operación</td><td>Retry-After en respuestas 429 y 503</td><td><code>ManejadorErrores</code></td></tr>
+<tr><td>47</td><td>Operación</td><td>Compresión de respuestas (Brotli y Gzip)</td><td><code>ResponseCompression</code></td></tr>
+<tr><td>48</td><td>Operación</td><td>Apagado ordenado: espera las emisiones en curso (90 s)</td><td><code>HostOptions</code></td></tr>
+<tr><td>49</td><td>DevOps</td><td>Dockerfile multi-etapa sin root, con HEALTHCHECK y docker-compose para Testing</td><td><code>Dockerfile</code></td></tr>
+<tr><td>50</td><td>DevOps</td><td>CI en GitHub Actions; analizadores de calidad con warnings como errores; .editorconfig</td><td><code>ci.yml / Directory.Build.props</code></td></tr>
+</table>
+<div class="box">Durante la implementación apareció un defecto: los servicios en segundo plano construían el firmante al iniciar y la aplicación se caía si faltaba el certificado. Ahora se carga en el primer uso (mejora 7) y el problema se informa en <code>/health/ready</code>.</div>
+<h3>Configuración nueva</h3>
+<p><code>Arca</code>: ReintentosLecturaMs, CacheParametrosMinutos, CacheCotizacionMinutos, CircuitoUmbralFallas, CircuitoPausaSegundos, MontoTopeConsumidorFinalSinIdentificar, ValidarContraTablasArca, CompletarFechaAutomatica, CotizacionAutomatica, ReconciliadorIntervaloSegundos, ReconciliadorAntiguedadMinimaSegundos, RetencionRegistroDias, RenovacionProactivaTicket, WebhookUrl, WebhookSecreto, AlertaVencimientoCertificadoDias.
+<code>Seguridad:Clientes</code> [{Nombre, Claves[], Permisos[]}]. <code>Api</code>: MaxBodyBytes, RateLimitPorMinuto, EmisionesConcurrentes, ApagadoSegundos, ForzarHttps, ProxiesConfiables. <code>Logging:Json</code>.</p>
+
+<h2 id="mejoras2">15. Versión 1.2: 50 mejoras adicionales</h2>
+<p><span class="tag ok">192 / 192 OK</span>, sin advertencias del compilador ni de los analizadores. La numeración continúa la de la versión 1.1.</p>
+<table>
+<tr><th>#</th><th>Área</th><th>Mejora</th><th>Dónde</th></tr>
+<tr><td>51</td><td>Funcional</td><td>Solicitud automática del CAEA de la próxima quincena (contingencia), dentro de la ventana de 5 días</td><td><code>CaeaAutomaticoHostedService</code></td></tr>
+<tr><td>52</td><td>Funcional</td><td>Consulta del CAEA vigente de la quincena en curso</td><td><code>GET /caea/vigente</code></td></tr>
+<tr><td>53</td><td>Funcional</td><td>Nota de crédito parcial con tope en el total del comprobante original</td><td><code>POST …/nota-credito-parcial</code></td></tr>
+<tr><td>54</td><td>Funcional</td><td>Duplicar un comprobante (facturación recurrente), con el período de servicio corrido a hoy</td><td><code>POST …/duplicar</code></td></tr>
+<tr><td>55</td><td>Funcional</td><td>Exportación CSV para Excel de los comprobantes autorizados</td><td><code>GET /admin/exportar.csv</code></td></tr>
+<tr><td>56</td><td>Funcional</td><td>Resumen de IVA por alícuota del período (las notas de crédito restan, en pesos)</td><td><code>GET /admin/resumen-iva</code></td></tr>
+<tr><td>57</td><td>Funcional</td><td>Búsqueda de emisiones con filtros y paginación</td><td><code>GET /admin/emisiones</code></td></tr>
+<tr><td>58</td><td>Funcional</td><td>Consulta de un rango de comprobantes en ARCA (máx. 100, concurrencia limitada)</td><td><code>GET /comprobantes/{pv}/{tipo}</code></td></tr>
+<tr><td>59</td><td>Funcional</td><td>Auditoría de numeración: detecta números emitidos por otro sistema en el mismo punto de venta</td><td><code>GET /admin/auditoria-numeracion</code></td></tr>
+<tr><td>60</td><td>Funcional</td><td>Plantillas de comprobantes frecuentes por cliente (crear, listar, obtener, eliminar)</td><td><code>/plantillas</code></td></tr>
+<tr><td>61</td><td>Funcional</td><td>Emisión desde plantilla con importes y receptor opcionales</td><td><code>POST /plantillas/{id}/emitir</code></td></tr>
+<tr><td>62</td><td>Funcional</td><td>Calculadora: cantidad × precio unitario</td><td><code>CalculadoraImportes</code></td></tr>
+<tr><td>63</td><td>Funcional</td><td>Calculadora: bonificación porcentual por línea</td><td><code>CalculadoraImportes</code></td></tr>
+<tr><td>64</td><td>Funcional</td><td>Calculadora: precios con IVA incluido (desglose automático del neto)</td><td><code>CalculadoraImportes</code></td></tr>
+<tr><td>65</td><td>Funcional</td><td>Número fiscal formateado (PPPPP-NNNNNNNN) y descripción legible en cada resultado</td><td><code>ResultadoEmision</code></td></tr>
+<tr><td>66</td><td>Funcional</td><td>Catálogos locales: tipos de comprobante, documentos, condiciones IVA y alícuotas</td><td><code>GET /catalogos</code></td></tr>
+<tr><td>67</td><td>Funcional</td><td>Normalización de la entrada (espacios y mayúsculas en códigos)</td><td><code>FacturacionService.Normalizar</code></td></tr>
+<tr><td>68</td><td>Validación</td><td>DNI dentro de rango (1 a 8 dígitos)</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>69</td><td>Validación</td><td>Receptor Responsable Inscripto debe identificarse con CUIT</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>70</td><td>Validación</td><td>Vencimiento de pago no anterior a la fecha del comprobante</td><td><code>ComprobanteValidator</code></td></tr>
+<tr><td>71</td><td>Rendimiento</td><td>Índice en memoria del registro en disco: lecturas y listados sin I/O, limpieza de temporales al iniciar</td><td><code>RegistroEmisionesArchivo</code></td></tr>
+<tr><td>72</td><td>Rendimiento</td><td>Pool de conexiones con renovación periódica, keep-alive y timeout de conexión</td><td><code>SocketsHttpHandler</code></td></tr>
+<tr><td>73</td><td>Rendimiento</td><td>Descompresión automática (gzip/deflate) de respuestas de ARCA</td><td><code>SocketsHttpHandler</code></td></tr>
+<tr><td>74</td><td>Rendimiento</td><td>Proxy saliente configurable para llegar a ARCA</td><td><code>Arca:ProxySaliente</code></td></tr>
+<tr><td>75</td><td>Rendimiento</td><td>Timeouts diferenciados para lecturas y emisiones</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>76</td><td>Rendimiento</td><td>Bulkhead: tope de llamadas simultáneas a ARCA</td><td><code>WsfeClienteResiliente</code></td></tr>
+<tr><td>77</td><td>Rendimiento</td><td>Precarga de tablas de parámetros al iniciar</td><td><code>PrecargaParametrosHostedService</code></td></tr>
+<tr><td>78</td><td>Rendimiento</td><td>ETag y 304 Not Modified en parámetros y catálogos</td><td><code>EtagAttribute</code></td></tr>
+<tr><td>79</td><td>Rendimiento</td><td>Respuestas JSON sin campos nulos (menor tamaño)</td><td><code>JsonOptions</code></td></tr>
+<tr><td>80</td><td>Rendimiento</td><td>Timeout global por solicitud HTTP (504)</td><td><code>RequestTimeouts</code></td></tr>
+<tr><td>81</td><td>Seguridad</td><td>Sólo se aceptan cuerpos application/json (415 en otro caso)</td><td><code>ConsumesAttribute</code></td></tr>
+<tr><td>82</td><td>Seguridad</td><td>Rate limit propio por cliente</td><td><code>ClienteApi.RateLimitPorMinuto</code></td></tr>
+<tr><td>83</td><td>Seguridad</td><td>Cuota diaria de emisiones por cliente (429 al agotarse)</td><td><code>ConsumeCuotaAttribute</code></td></tr>
+<tr><td>84</td><td>Seguridad</td><td>Auditoría append-only (JSONL) de toda operación que modifica estado</td><td><code>AuditoriaFiltro</code></td></tr>
+<tr><td>85</td><td>Seguridad</td><td>Consulta de la auditoría por fecha y cliente</td><td><code>GET /admin/auditoria</code></td></tr>
+<tr><td>86</td><td>Seguridad</td><td>Archivos del registro con permisos 0600</td><td><code>RegistroEmisionesArchivo</code></td></tr>
+<tr><td>87</td><td>Seguridad</td><td>Diagnóstico de configuración al iniciar con advertencias de riesgo</td><td><code>DiagnosticoConfiguracion</code></td></tr>
+<tr><td>88</td><td>Seguridad</td><td>Configuración efectiva sin secretos para soporte</td><td><code>GET /admin/config</code></td></tr>
+<tr><td>89</td><td>Seguridad</td><td>Lista de IPs/redes CIDR permitidas por cliente</td><td><code>ClienteApi.IpsPermitidas</code></td></tr>
+<tr><td>90</td><td>Seguridad</td><td>Vencimiento de claves de API por cliente</td><td><code>ClienteApi.VenceEl</code></td></tr>
+<tr><td>91</td><td>Integración</td><td>Ejemplos de request en OpenAPI</td><td><code>EjemplosFiltro</code></td></tr>
+<tr><td>92</td><td>Integración</td><td>Cabeceras de respuesta y X-Correlation-Id documentadas en OpenAPI</td><td><code>CabecerasRespuestaFiltro</code></td></tr>
+<tr><td>93</td><td>Integración</td><td>SDK .NET con reintentos que conservan la Idempotency-Key</td><td><code>Arca.Facturacion.Cliente</code></td></tr>
+<tr><td>94</td><td>Integración</td><td>Colección Postman generada desde el contrato (49 requests)</td><td><code>tools/*.postman_collection.json</code></td></tr>
+<tr><td>95</td><td>Integración</td><td>Scripts de certificado ARCA (CSR y .pfx) para bash y PowerShell</td><td><code>scripts/generar-certificado.*</code></td></tr>
+<tr><td>96</td><td>Integración</td><td>Prueba de carga k6 con umbrales</td><td><code>tools/carga-k6.js</code></td></tr>
+<tr><td>97</td><td>Integración</td><td>Guía de operación (runbook) para incidentes frecuentes</td><td><code>especificación §16</code></td></tr>
+<tr><td>98</td><td>Integración</td><td>Configuración de ejemplo para el entorno de Testing</td><td><code>appsettings.Testing.json</code></td></tr>
+<tr><td>99</td><td>Calidad</td><td>Prueba de contrato: falla si la API cambia sin actualizar docs/openapi.json</td><td><code>ApiV12Tests</code></td></tr>
+<tr><td>100</td><td>Calidad</td><td>Versión de esquema en el registro de emisiones (migraciones futuras)</td><td><code>RegistroEmision.Version</code></td></tr>
+</table>
+<h3>Configuración nueva</h3>
+<p><code>Arca</code>: TimeoutLecturaSegundos, TimeoutEmisionSegundos, MaxLlamadasConcurrentesArca, ProxySaliente, VidaConexionMinutos, SolicitarCaeaAutomatico, PlantillasPath, AuditoriaPath, PrecargarParametros. <code>Seguridad:Clientes[]</code>: VenceEl, IpsPermitidas, RateLimitPorMinuto, CuotaDiariaEmisiones. <code>Api</code>: TimeoutSolicitudSegundos.</p>
+
+<h2 id="runbook">16. Guía de operación (runbook)</h2>
+<table>
+<tr><th>Síntoma</th><th>Diagnóstico</th><th>Acción</th></tr>
+<tr><td><code>/health/ready</code> en Unhealthy por <b>certificado</b></td><td>Falta el .pfx, la contraseña es incorrecta o el certificado venció.</td><td>Revisar <code>Arca:CertificadoPath</code> y <code>Arca__CertificadoPassword</code>. Renovar con <code>scripts/generar-certificado</code> + WSASS.</td></tr>
+<tr><td>Muchos 503 con <code>Retry-After</code></td><td>Circuito hacia ARCA abierto (<code>/api/v1/info</code> → circuito).</td><td>Verificar ARCA con <code>GET /api/v1/salud/arca</code>. Se recupera solo tras <code>CircuitoPausaSegundos</code>. Si ARCA está caído y hay CAEA habilitado, operar en contingencia.</td></tr>
+<tr><td>Error 600 persistente / 502 de WSAA</td><td>Reloj desfasado o certificado no asociado a wsfe.</td><td>Ver <code>desfasajeRelojSegundos</code> en <code>/api/v1/info</code>; sincronizar NTP. Revisar la asociación del certificado en WSASS.</td></tr>
+<tr><td>WSAA responde “ya posee un TA válido”</td><td>Se perdió el TA en caché (reinicio sin <code>CacheTicketPath</code>).</td><td>Configurar <code>CacheTicketPath</code> en un volumen persistente. Esperar el vencimiento del TA (máx. 12 h).</td></tr>
+<tr><td>Emisiones en estado Pendiente</td><td><code>GET /api/v1/admin/emisiones/pendientes</code>.</td><td>El reconciliador las resuelve solo; para forzarlo, <code>POST /api/v1/admin/emisiones/reconciliar</code>. Las que muestren “datos distintos” en los logs requieren revisión manual.</td></tr>
+<tr><td>Error 10016 / “otro sistema emite”</td><td><code>GET /api/v1/admin/auditoria-numeracion/{pv}/{tipo}?desde=N</code>.</td><td>Asignar un punto de venta exclusivo al microservicio.</td></tr>
+<tr><td>429 “Cuota diaria agotada”</td><td>El cliente llegó a <code>CuotaDiariaEmisiones</code>.</td><td>Ajustar la cuota del cliente o esperar al día siguiente (hora argentina).</td></tr>
+<tr><td>Cambio de API sin documentar</td><td>Falla la prueba de contrato.</td><td>Ejecutar el servicio en Development, guardar <code>/swagger/v1/swagger.json</code> en <code>docs/openapi.json</code> y regenerar la colección Postman.</td></tr>
+<tr><td>Rotar una clave de API</td><td>—</td><td>Agregar la clave nueva en <code>Claves</code> del cliente, migrar al consumidor y luego quitar la vieja. La idempotencia se conserva (va por nombre de cliente).</td></tr>
+</table>
+
+<h2 id="mejoras3">17. Versión 1.3: 150 mejoras adicionales</h2>
+<p><span class="tag ok">251 / 251 OK</span> (antes 192). El build no tiene advertencias del compilador ni de los analizadores. La numeración continúa desde la 101.</p>
+<table><tr><th>#</th><th>Área</th><th>Mejora</th></tr>
+<tr><td>101</td><td>Validación</td><td>Comprobantes asociados: punto de venta y número válidos</td></tr>
+<tr><td>102</td><td>Validación</td><td>Comprobantes asociados de la misma clase que la nota (A con A, B con B…)</td></tr>
+<tr><td>103</td><td>Validación</td><td>Comprobantes asociados: fecha en formato yyyyMMdd</td></tr>
+<tr><td>104</td><td>Validación</td><td>Comprobantes asociados: CUIT válida</td></tr>
+<tr><td>105</td><td>Validación</td><td>Comprobantes asociados sin repetidos</td></tr>
+<tr><td>106</td><td>Validación</td><td>El tributo 99 (Otros) exige descripción</td></tr>
+<tr><td>107</td><td>Validación</td><td>Tributos: Id, base imponible y alícuota no negativos</td></tr>
+<tr><td>108</td><td>Validación</td><td>Opcionales con Id y Valor obligatorios y sin repetir</td></tr>
+<tr><td>109</td><td>Validación</td><td>El opcional 2101 debe ser un CBU de 22 dígitos</td></tr>
+<tr><td>110</td><td>Validación</td><td>Dígitos verificadores del CBU</td></tr>
+<tr><td>111</td><td>Validación</td><td>Compradores: porcentaje mayor a 0 y CUIT válida</td></tr>
+<tr><td>112</td><td>Validación</td><td>MonCotiz con hasta 6 decimales</td></tr>
+<tr><td>113</td><td>Validación</td><td>Importe máximo por comprobante configurable</td></tr>
+<tr><td>114</td><td>Validación</td><td>PeriodoAsoc no puede ser futuro</td></tr>
+<tr><td>115</td><td>Validación</td><td>Actividades válidas y sin repetir</td></tr>
+<tr><td>116</td><td>Validación</td><td>DocTipo dentro del catálogo de documentos</td></tr>
+<tr><td>117</td><td>Validación</td><td>Advertencias separadas de los errores (no impiden emitir)</td></tr>
+<tr><td>118</td><td>Validación</td><td>Advertencia de autofacturación</td></tr>
+<tr><td>119</td><td>Validación</td><td>Advertencia de fecha distinta de hoy</td></tr>
+<tr><td>120</td><td>Validación</td><td>Advertencia de importe alto (umbral configurable)</td></tr>
+<tr><td>121</td><td>Validación</td><td>Advertencia de cercanía al tope de consumidor final y de cancelación en moneda extranjera</td></tr>
+<tr><td>122</td><td>Funcional</td><td>Validación previa sin emitir (POST /comprobantes/validar)</td></tr>
+<tr><td>123</td><td>Funcional</td><td>Modo simulación completo, sin certificado ni conexión con ARCA</td></tr>
+<tr><td>124</td><td>Funcional</td><td>Simulador con numeración correlativa, CAE identificable (empieza con 99) y CAEA</td></tr>
+<tr><td>125</td><td>Funcional</td><td>Inyección de fallas configurable en simulación</td></tr>
+<tr><td>126</td><td>Funcional</td><td>Suscripciones de facturación recurrente (alta, baja, consulta)</td></tr>
+<tr><td>127</td><td>Funcional</td><td>Ejecutor automático de suscripciones en segundo plano</td></tr>
+<tr><td>128</td><td>Funcional</td><td>Idempotencia por período: nunca factura dos veces el mismo período</td></tr>
+<tr><td>129</td><td>Funcional</td><td>Pausar y reanudar suscripciones</td></tr>
+<tr><td>130</td><td>Funcional</td><td>Historial de ejecuciones de cada suscripción</td></tr>
+<tr><td>131</td><td>Funcional</td><td>QR fiscal en PNG</td></tr>
+<tr><td>132</td><td>Funcional</td><td>Representación imprimible en HTML (original, duplicado, triplicado)</td></tr>
+<tr><td>133</td><td>Funcional</td><td>Datos del emisor configurables para la impresión</td></tr>
+<tr><td>134</td><td>Funcional</td><td>Leyenda de transparencia fiscal (Ley 27.743) en comprobantes B</td></tr>
+<tr><td>135</td><td>Funcional</td><td>Período facturado y vencimiento de pago en la impresión</td></tr>
+<tr><td>136</td><td>Funcional</td><td>Importe en letras (y endpoint propio)</td></tr>
+<tr><td>137</td><td>Funcional</td><td>Respaldo del registro de emisiones en JSONL</td></tr>
+<tr><td>138</td><td>Funcional</td><td>Restauración de respaldo sin pisar el estado actual</td></tr>
+<tr><td>139</td><td>Funcional</td><td>Reporte de ventas por receptor</td></tr>
+<tr><td>140</td><td>Funcional</td><td>Serie diaria de ventas</td></tr>
+<tr><td>141</td><td>Funcional</td><td>Ventas por punto de venta</td></tr>
+<tr><td>142</td><td>Funcional</td><td>Registro de rechazos recientes de ARCA</td></tr>
+<tr><td>143</td><td>Funcional</td><td>Códigos de rechazo más frecuentes</td></tr>
+<tr><td>144</td><td>Funcional</td><td>Receptores bloqueados para facturación</td></tr>
+<tr><td>145</td><td>Funcional</td><td>Agenda de receptores con validación de CUIT y condición IVA</td></tr>
+<tr><td>146</td><td>Funcional</td><td>Emisión indicando el receptor de la agenda (receptorId)</td></tr>
+<tr><td>147</td><td>Funcional</td><td>Búsqueda de receptores por texto</td></tr>
+<tr><td>148</td><td>Funcional</td><td>Referencia externa (p.ej. número de pedido) en cada emisión</td></tr>
+<tr><td>149</td><td>Funcional</td><td>Búsqueda de emisiones por referencia externa</td></tr>
+<tr><td>150</td><td>Funcional</td><td>Resolución manual de una emisión pendiente</td></tr>
+<tr><td>151</td><td>Funcional</td><td>Reenvío manual de webhook</td></tr>
+<tr><td>152</td><td>Funcional</td><td>Evento de rechazo por webhook (opcional)</td></tr>
+<tr><td>153</td><td>Funcional</td><td>Varias URLs de webhook</td></tr>
+<tr><td>154</td><td>Funcional</td><td>Registro de entregas de webhook</td></tr>
+<tr><td>155</td><td>Funcional</td><td>Cierre diario por punto de venta y tipo</td></tr>
+<tr><td>156</td><td>Funcional</td><td>Control del último número del registro contra ARCA en el cierre</td></tr>
+<tr><td>157</td><td>Funcional</td><td>Próximo número a autorizar (informativo)</td></tr>
+<tr><td>158</td><td>Funcional</td><td>Puntos de venta con estado legible</td></tr>
+<tr><td>159</td><td>Funcional</td><td>Condición frente al IVA del emisor configurable</td></tr>
+<tr><td>160</td><td>Funcional</td><td>Clases de comprobante permitidas según el emisor (RI: A/B; Monotributo/Exento: C)</td></tr>
+<tr><td>161</td><td>Rendimiento</td><td>Registro de emisiones en SQLite (transaccional)</td></tr>
+<tr><td>162</td><td>Rendimiento</td><td>Índices por número, fecha, estado y referencia</td></tr>
+<tr><td>163</td><td>Rendimiento</td><td>Migración automática del registro JSON a SQLite</td></tr>
+<tr><td>164</td><td>Rendimiento</td><td>SQLite en modo WAL con escritura sincrónica completa</td></tr>
+<tr><td>165</td><td>Rendimiento</td><td>Bloqueo de numeración entre procesos del mismo servidor</td></tr>
+<tr><td>166</td><td>Rendimiento</td><td>Serialización del registro generada en compilación</td></tr>
+<tr><td>167</td><td>Rendimiento</td><td>Caché de comprobantes autorizados (inmutables)</td></tr>
+<tr><td>168</td><td>Rendimiento</td><td>Single-flight: solicitudes concurrentes de una tabla comparten una llamada</td></tr>
+<tr><td>169</td><td>Rendimiento</td><td>Tamaño de caché configurable</td></tr>
+<tr><td>170</td><td>Rendimiento</td><td>GC de servidor concurrente y PGO dinámico</td></tr>
+<tr><td>171</td><td>Rendimiento</td><td>Imagen Docker compilada con ReadyToRun</td></tr>
+<tr><td>172</td><td>Rendimiento</td><td>Límites de Kestrel configurables (conexiones, cabeceras, keep-alive)</td></tr>
+<tr><td>173</td><td>Rendimiento</td><td>Descompresión de solicitudes gzip/brotli</td></tr>
+<tr><td>174</td><td>Rendimiento</td><td>Output cache de catálogos</td></tr>
+<tr><td>175</td><td>Rendimiento</td><td>Paginación con cabeceras Link y X-Total-Count</td></tr>
+<tr><td>176</td><td>Rendimiento</td><td>Tamaño máximo de lote configurable</td></tr>
+<tr><td>177</td><td>Rendimiento</td><td>Auditoría con escritura asíncrona en cola</td></tr>
+<tr><td>178</td><td>Rendimiento</td><td>Rotación diaria de los archivos de auditoría</td></tr>
+<tr><td>179</td><td>Rendimiento</td><td>Retención y purga automática de la auditoría</td></tr>
+<tr><td>180</td><td>Rendimiento</td><td>Métrica de emisiones pendientes</td></tr>
+<tr><td>181</td><td>Rendimiento</td><td>Métrica de días al vencimiento del certificado</td></tr>
+<tr><td>182</td><td>Rendimiento</td><td>Métricas de estado del circuito y llamadas en curso</td></tr>
+<tr><td>183</td><td>Rendimiento</td><td>Histograma de duración total de emisión y contador de advertencias</td></tr>
+<tr><td>184</td><td>Rendimiento</td><td>Endpoint /metrics en formato Prometheus, sin dependencias</td></tr>
+<tr><td>185</td><td>Rendimiento</td><td>Logs de alto volumen generados en compilación (LoggerMessage)</td></tr>
+<tr><td>186</td><td>Seguridad</td><td>Claves de API guardadas como hash SHA-256</td></tr>
+<tr><td>187</td><td>Seguridad</td><td>Comando para generar claves y sus hashes</td></tr>
+<tr><td>188</td><td>Seguridad</td><td>Bloqueo temporal de IP por intentos fallidos</td></tr>
+<tr><td>189</td><td>Seguridad</td><td>Cabeceras Permissions-Policy, COOP y CORP</td></tr>
+<tr><td>190</td><td>Seguridad</td><td>Idempotency-Key restringida a ASCII imprimible</td></tr>
+<tr><td>191</td><td>Seguridad</td><td>Sanitización de valores de usuario en logs</td></tr>
+<tr><td>192</td><td>Seguridad</td><td>Firma HMAC de solicitudes por cliente</td></tr>
+<tr><td>193</td><td>Seguridad</td><td>Protección anti-replay de la firma (±5 minutos)</td></tr>
+<tr><td>194</td><td>Seguridad</td><td>Auditoría con IP, user-agent e importe</td></tr>
+<tr><td>195</td><td>Seguridad</td><td>Auditoría con hash encadenado y verificación de integridad</td></tr>
+<tr><td>196</td><td>Seguridad</td><td>Secretos desde archivos (convención _FILE)</td></tr>
+<tr><td>197</td><td>Seguridad</td><td>Control de la CUIT del certificado frente a la configurada</td></tr>
+<tr><td>198</td><td>Seguridad</td><td>Clave RSA mínima de 2048 bits</td></tr>
+<tr><td>199</td><td>Seguridad</td><td>CORS por lista blanca</td></tr>
+<tr><td>200</td><td>Seguridad</td><td>Recarga en caliente de clientes y claves</td></tr>
+<tr><td>201</td><td>Seguridad</td><td>Profundidad máxima de JSON (32)</td></tr>
+<tr><td>202</td><td>Seguridad</td><td>Rechazo opcional de campos JSON desconocidos</td></tr>
+<tr><td>203</td><td>Seguridad</td><td>Swagger protegido con permiso admin fuera de Development</td></tr>
+<tr><td>204</td><td>Seguridad</td><td>Cifrado en reposo AES-256-GCM del registro de emisiones</td></tr>
+<tr><td>205</td><td>Seguridad</td><td>Detalle de salud visible sólo para admin</td></tr>
+<tr><td>206</td><td>Seguridad</td><td>Timeout de lectura de cabeceras</td></tr>
+<tr><td>207</td><td>Seguridad</td><td>Advertencia de certificado sin contraseña</td></tr>
+<tr><td>208</td><td>Seguridad</td><td>Pinning opcional del certificado TLS de ARCA</td></tr>
+<tr><td>209</td><td>Seguridad</td><td>Modo mantenimiento (emisiones 503, consultas disponibles)</td></tr>
+<tr><td>210</td><td>Seguridad</td><td>Endpoints para activar y desactivar el mantenimiento</td></tr>
+<tr><td>211</td><td>Operación</td><td>Comando verificar (configuración, certificado y FEDummy)</td></tr>
+<tr><td>212</td><td>Operación</td><td>Comando probar-wsaa</td></tr>
+<tr><td>213</td><td>Operación</td><td>Comando ultimo (último comprobante autorizado)</td></tr>
+<tr><td>214</td><td>Operación</td><td>Comando reconciliar</td></tr>
+<tr><td>215</td><td>Operación</td><td>Drenaje en el apagado (ready responde 503)</td></tr>
+<tr><td>216</td><td>Operación</td><td>Probe /health/startup</td></tr>
+<tr><td>217</td><td>Operación</td><td>Commit y fecha de compilación en /info</td></tr>
+<tr><td>218</td><td>Operación</td><td>Tiempo activo y estado de mantenimiento en /info</td></tr>
+<tr><td>219</td><td>Operación</td><td>URI de tipo en ProblemDetails</td></tr>
+<tr><td>220</td><td>Operación</td><td>Códigos de error estables (VALIDACION, ARCA_RECHAZO…)</td></tr>
+<tr><td>221</td><td>Operación</td><td>Cabecera Idempotency-Replayed en reintentos</td></tr>
+<tr><td>222</td><td>Operación</td><td>Cabecera Location del comprobante emitido</td></tr>
+<tr><td>223</td><td>Operación</td><td>Estado de varias emisiones en una sola llamada</td></tr>
+<tr><td>224</td><td>Operación</td><td>Webhook de prueba</td></tr>
+<tr><td>225</td><td>Operación</td><td>Etiquetas en español en OpenAPI</td></tr>
+<tr><td>226</td><td>Operación</td><td>Servidores configurables en OpenAPI</td></tr>
+<tr><td>227</td><td>Integración</td><td>SDK: anular, duplicar, lote y validar</td></tr>
+<tr><td>228</td><td>Integración</td><td>SDK: firma HMAC</td></tr>
+<tr><td>229</td><td>Integración</td><td>SDK: propagación del Correlation-ID</td></tr>
+<tr><td>230</td><td>Integración</td><td>Colección Postman regenerada (72 rutas)</td></tr>
+<tr><td>231</td><td>Integración</td><td>Scripts de tareas (bash y PowerShell)</td></tr>
+<tr><td>232</td><td>Integración</td><td>Script de respaldo con retención de 30 copias</td></tr>
+<tr><td>233</td><td>Integración</td><td>docker-compose con healthcheck, límites y secrets</td></tr>
+<tr><td>234</td><td>Integración</td><td>Manifiestos de Kubernetes (una réplica, probes, PVC, sin root)</td></tr>
+<tr><td>235</td><td>Integración</td><td>.env.example</td></tr>
+<tr><td>236</td><td>Integración</td><td>Configuración de Dependabot</td></tr>
+<tr><td>237</td><td>Integración</td><td>Análisis CodeQL</td></tr>
+<tr><td>238</td><td>Integración</td><td>Cobertura de código en CI</td></tr>
+<tr><td>239</td><td>Calidad</td><td>Pruebas de propiedades de la calculadora (500 casos aleatorios)</td></tr>
+<tr><td>240</td><td>Calidad</td><td>Prueba de concurrencia de SQLite</td></tr>
+<tr><td>241</td><td>Documentación</td><td>Diagrama de secuencia de la emisión</td></tr>
+<tr><td>242</td><td>Documentación</td><td>Glosario de ARCA</td></tr>
+<tr><td>243</td><td>Documentación</td><td>Preguntas frecuentes de integración</td></tr>
+<tr><td>244</td><td>Documentación</td><td>Catálogo de códigos de error</td></tr>
+<tr><td>245</td><td>Documentación</td><td>Guía de actualización a la versión 1.3</td></tr>
+<tr><td>246</td><td>Documentación</td><td>Ejemplos con curl</td></tr>
+<tr><td>247</td><td>Integración</td><td>Cliente PHP de ejemplo (stack del proyecto)</td></tr>
+<tr><td>248</td><td>Integración</td><td>Cliente Dart de ejemplo</td></tr>
+<tr><td>249</td><td>Corrección</td><td>Swagger quedaba accesible sin clave fuera de Development (se evaluaba antes de la autenticación)</td></tr>
+<tr><td>250</td><td>Corrección</td><td>Apagado ordenado de la auditoría: se vacía la cola antes de salir</td></tr>
+</table>
+
+<h2 id="secuencia">18. Secuencia de la emisión</h2>
+<svg viewBox="0 0 760 330" width="100%" role="img" aria-label="Secuencia de emisión" style="max-width:760px;font:12px system-ui;color:var(--fg)">
+<g fill="none" stroke="currentColor"><line x1="80" y1="40" x2="80" y2="320"/><line x1="280" y1="40" x2="280" y2="320"/><line x1="480" y1="40" x2="480" y2="320"/><line x1="680" y1="40" x2="680" y2="320"/></g>
+<g fill="currentColor" text-anchor="middle"><text x="80" y="25">Sistema (ERP)</text><text x="280" y="25">Microservicio</text><text x="480" y="25">Registro (SQLite)</text><text x="680" y="25">ARCA WSFEv1</text></g>
+<g stroke="currentColor" fill="currentColor"><line x1="80" y1="60" x2="275" y2="60"/><text x="180" y="55" text-anchor="middle" stroke="none">POST /comprobantes + Idempotency-Key</text>
+<line x1="280" y1="90" x2="475" y2="90"/><text x="380" y="85" text-anchor="middle" stroke="none">¿clave ya registrada? → devolver</text>
+<line x1="280" y1="120" x2="675" y2="120"/><text x="480" y="115" text-anchor="middle" stroke="none">FECompUltimoAutorizado (bajo bloqueo PV/tipo)</text>
+<line x1="280" y1="150" x2="475" y2="150"/><text x="380" y="145" text-anchor="middle" stroke="none">guardar Pendiente(N) ANTES de enviar</text>
+<line x1="280" y1="180" x2="675" y2="180"/><text x="480" y="175" text-anchor="middle" stroke="none">FECAESolicitar(N)</text>
+<line x1="675" y1="210" x2="285" y2="210" stroke-dasharray="4 3"/><text x="480" y="205" text-anchor="middle" stroke="none">CAE · o timeout → FECompConsultar(N) con esperas</text>
+<line x1="280" y1="240" x2="475" y2="240"/><text x="380" y="235" text-anchor="middle" stroke="none">Autorizado(N, CAE)</text>
+<line x1="275" y1="270" x2="85" y2="270" stroke-dasharray="4 3"/><text x="180" y="265" text-anchor="middle" stroke="none">200 + CAE + QR · 503 = reintentar con la MISMA clave</text></g>
+</svg>
+
+<h2 id="glosario">19. Glosario</h2>
+<table>
+<tr><td><b>ARCA</b></td><td>Agencia de Recaudación y Control Aduanero (ex AFIP).</td></tr>
+<tr><td><b>WSAA</b></td><td>Servicio de autenticación: con el certificado se obtiene un Ticket de Acceso (TA: token y sign) válido hasta 12 h.</td></tr>
+<tr><td><b>WSFEv1</b></td><td>Servicio de factura electrónica (comprobantes A, B, C, M y FCE sin detalle de ítems).</td></tr>
+<tr><td><b>CAE</b></td><td>Código de Autorización Electrónico: 14 dígitos que ARCA otorga a cada comprobante, con fecha de vencimiento.</td></tr>
+<tr><td><b>CAEA</b></td><td>CAE Anticipado: se solicita por quincena y se usa en contingencia; los comprobantes se informan después.</td></tr>
+<tr><td><b>Punto de venta</b></td><td>Numerador habilitado en ARCA para web services. La numeración es correlativa por punto de venta y tipo.</td></tr>
+<tr><td><b>Condición IVA del receptor</b></td><td>Dato obligatorio desde la RG 5616 (FEParamGetCondicionIvaReceptor).</td></tr>
+<tr><td><b>Idempotency-Key</b></td><td>Clave que identifica una emisión lógica: repetirla nunca genera otro comprobante.</td></tr>
+<tr><td><b>Homologación</b></td><td>Entorno de pruebas de ARCA (wsaahomo / wswhomo), sin validez fiscal.</td></tr>
+</table>
+
+<h2 id="faq">20. Preguntas frecuentes de integración</h2>
+<dl>
+<dt><b>¿Qué hago si recibo 503?</b></dt><dd>Reintentar con la <b>misma</b> Idempotency-Key. El servicio verifica en ARCA y nunca emite dos veces.</dd>
+<dt><b>¿Cómo pruebo sin certificado?</b></dt><dd>Con <code>Arca:ModoSimulacion=true</code>. Los CAE empiezan con 99 y tienen la observación 99999.</dd>
+<dt><b>¿Cómo facturo un abono mensual?</b></dt><dd>Con una suscripción (<code>PUT /api/v1/suscripciones/{id}</code>). Se emite sola en cada período y nunca dos veces el mismo.</dd>
+<dt><b>¿Cómo imprimo la factura?</b></dt><dd><code>GET …/{nro}/html</code> devuelve una página lista para imprimir o guardar como PDF desde el navegador.</dd>
+<dt><b>¿Puedo correr dos instancias?</b></dt><dd>Sólo en el mismo servidor, con SQLite y <code>BloqueoEntreProcesosPath</code>. Entre servidores, no: hace falta un almacén distribuido.</dd>
+<dt><b>¿Cómo asocio la factura a mi pedido?</b></dt><dd>Con <code>referenciaExterna</code>, y se busca con <code>GET /api/v1/admin/emisiones?referencia=…</code>.</dd>
+</dl>
+
+<h2 id="errores-catalogo">21. Catálogo de códigos de error</h2>
+<table><tr><th>codigo</th><th>HTTP</th><th>Significado</th><th>Reintentar</th></tr>
+<tr><td>VALIDACION</td><td>400</td><td>El comprobante no pasa la validación local</td><td>No (corregir)</td></tr>
+<tr><td>SOLICITUD_INVALIDA</td><td>400/413</td><td>Cuerpo o parámetros mal formados o demasiado grandes</td><td>No</td></tr>
+<tr><td>IDEMPOTENCIA_CONFLICTO</td><td>409</td><td>La clave ya se usó con otro contenido</td><td>No (usar otra clave)</td></tr>
+<tr><td>ARCA_RECHAZO</td><td>422</td><td>ARCA rechazó la operación o la numeración está en conflicto</td><td>No</td></tr>
+<tr><td>ARCA_RESULTADO_INCIERTO</td><td>503</td><td>Sin confirmación de ARCA</td><td>Sí, con la misma clave</td></tr>
+<tr><td>ARCA_NO_DISPONIBLE</td><td>503</td><td>Circuito abierto</td><td>Sí, tras Retry-After</td></tr>
+<tr><td>MANTENIMIENTO</td><td>503</td><td>Emisión suspendida por mantenimiento</td><td>Sí, más tarde</td></tr>
+<tr><td>WSAA_ERROR / ARCA_ERROR_TECNICO</td><td>502</td><td>Falla de autenticación o técnica de ARCA</td><td>Revisar logs</td></tr>
+<tr><td>ERROR_INTERNO</td><td>500</td><td>Error no previsto</td><td>Revisar logs (traceId)</td></tr>
+</table>
+
+<h2 id="migracion">22. Guía de actualización a 1.3</h2>
+<ol>
+<li>Recomendado: definir <code>Arca:RegistroEmisionesSqlite</code>. Los JSON de <code>RegistroEmisionesPath</code> se migran solos al primer arranque; conservar el directorio como respaldo.</li>
+<li>Definir <code>Arca:BloqueoEntreProcesosPath</code> si alguna vez puede haber dos procesos en el mismo servidor.</li>
+<li>Pasar las claves a <code>ClavesHash</code> (comando <code>generar-clave</code>). La recarga es en caliente.</li>
+<li>Fuera de Development, Swagger ahora exige una clave con permiso admin y el detalle de <code>/health/ready</code> también.</li>
+<li>La auditoría ahora rota por día (<code>auditoria-AAAAMMDD.jsonl</code>).</li>
+<li>Las respuestas de error agregan <code>codigo</code> y <code>type</code>. Las emisiones agregan <code>advertencias</code>, <code>referencia</code>, <code>Location</code> e <code>Idempotency-Replayed</code>.</li>
+<li>El opcional 2101 ahora exige un CBU válido.</li>
+</ol>
+
+<h2 id="curl">23. Ejemplos con curl</h2>
+<pre>curl -s -X POST http://localhost:8080/api/v1/comprobantes/validar -H "X-Api-Key: $K" -H "Content-Type: application/json" -d @factura.json
+curl -s -X POST http://localhost:8080/api/v1/comprobantes -H "X-Api-Key: $K" -H "Idempotency-Key: venta-1001" -H "Content-Type: application/json" -d @factura.json -i
+curl -s http://localhost:8080/api/v1/comprobantes/3/6/42/html -H "X-Api-Key: $K" -o factura.html
+curl -s "http://localhost:8080/api/v1/admin/cierre-diario" -H "X-Api-Key: $KADMIN"
+curl -s http://localhost:8080/metrics</pre>
+<h2 id="mejoras4">24. Versión 1.4: 150 mejoras adicionales</h2>
+<p><span class="tag ok">275 / 275 OK</span> (antes 251). Build sin advertencias. La numeración continúa desde la 251. Esta versión incluye la corrección de los 22 hallazgos de la revisión adversaria de la 1.3, el registro en MySQL/MariaDB con bloqueo distribuido y la consulta al padrón A13. Todo se probó en el ambiente de Testing (homologación) y en modo simulación.</p>
+<table><tr><th>#</th><th>Área</th><th>Mejora</th></tr>
+<tr><td>251</td><td>Persistencia</td><td>Registro de emisiones en MySQL/MariaDB (Arca:RegistroEmisionesMySql)</td></tr>
+<tr><td>252</td><td>Persistencia</td><td>Varios servidores de API pueden compartir el mismo registro de emisiones</td></tr>
+<tr><td>253</td><td>Persistencia</td><td>Tabla InnoDB utf8mb4 creada automáticamente al iniciar</td></tr>
+<tr><td>254</td><td>Persistencia</td><td>Índice por punto de venta, tipo y número</td></tr>
+<tr><td>255</td><td>Persistencia</td><td>Índice por fecha del comprobante</td></tr>
+<tr><td>256</td><td>Persistencia</td><td>Índice por estado (búsqueda rápida de pendientes)</td></tr>
+<tr><td>257</td><td>Persistencia</td><td>Índice por referencia externa</td></tr>
+<tr><td>258</td><td>Persistencia</td><td>Índice por cliente</td></tr>
+<tr><td>259</td><td>Persistencia</td><td>Columna de última actualización mantenida por la base</td></tr>
+<tr><td>260</td><td>Persistencia</td><td>Alta o actualización atómica con ON DUPLICATE KEY UPDATE</td></tr>
+<tr><td>261</td><td>Persistencia</td><td>Reintento automático ante deadlock y timeout de bloqueo (hasta 4 intentos con espera creciente)</td></tr>
+<tr><td>262</td><td>Persistencia</td><td>Reintento ante errores transitorios de conexión</td></tr>
+<tr><td>263</td><td>Persistencia</td><td>Nombre de tabla configurable y validado (sin inyección SQL)</td></tr>
+<tr><td>264</td><td>Persistencia</td><td>Consultas siempre parametrizadas</td></tr>
+<tr><td>265</td><td>Persistencia</td><td>Cifrado AES-GCM en reposo también en MySQL</td></tr>
+<tr><td>266</td><td>Persistencia</td><td>Filas ilegibles en MySQL se omiten y se cuentan (UltimasIlegibles)</td></tr>
+<tr><td>267</td><td>Persistencia</td><td>Listado de pendientes por índice en MySQL</td></tr>
+<tr><td>268</td><td>Persistencia</td><td>Recorte seguro de cliente y referencia al largo de columna indexada</td></tr>
+<tr><td>269</td><td>Persistencia</td><td>Ping de conectividad para diagnóstico</td></tr>
+<tr><td>270</td><td>Persistencia</td><td>Migración automática desde SQLite al primer arranque con MySQL vacío</td></tr>
+<tr><td>271</td><td>Persistencia</td><td>Migración automática desde el registro JSON si no hay SQLite</td></tr>
+<tr><td>272</td><td>Persistencia</td><td>La migración nunca pisa claves existentes y devuelve copiados/omitidos</td></tr>
+<tr><td>273</td><td>Persistencia</td><td>Opción MigrarRegistroAMySql para desactivar la migración</td></tr>
+<tr><td>274</td><td>Persistencia</td><td>Prioridad de backends: MySQL, SQLite, JSON, memoria</td></tr>
+<tr><td>275</td><td>Concurrencia</td><td>Bloqueo de numeración distribuido con GET_LOCK entre servidores</td></tr>
+<tr><td>276</td><td>Concurrencia</td><td>Nombre de bloqueo por CUIT, punto de venta y tipo (no bloquea otros tipos)</td></tr>
+<tr><td>277</td><td>Concurrencia</td><td>Espera máxima del bloqueo distribuido acotada (1 a 3600 s)</td></tr>
+<tr><td>278</td><td>Concurrencia</td><td>Liberación con RELEASE_LOCK e idempotente ante doble Dispose</td></tr>
+<tr><td>279</td><td>Concurrencia</td><td>Si se corta la conexión, el servidor libera el bloqueo solo</td></tr>
+<tr><td>280</td><td>Concurrencia</td><td>Conexión cerrada si falla la adquisición (sin fugas)</td></tr>
+<tr><td>281</td><td>Concurrencia</td><td>Opción BloqueoDistribuidoMySql para elegir el bloqueo por archivo</td></tr>
+<tr><td>282</td><td>Concurrencia</td><td>En simulación no se usa el bloqueo distribuido</td></tr>
+<tr><td>283</td><td>Padrón</td><td>Cliente del padrón A13 de ARCA (ws_sr_padron_a13, getPersona)</td></tr>
+<tr><td>284</td><td>Padrón</td><td>Ticket de acceso propio del servicio de padrón, cacheado por WSAA</td></tr>
+<tr><td>285</td><td>Padrón</td><td>URL del padrón por ambiente con override PadronUrl</td></tr>
+<tr><td>286</td><td>Padrón</td><td>Parseo tolerante a espacios de nombres y campos faltantes</td></tr>
+<tr><td>287</td><td>Padrón</td><td>Denominación: razón social o "Apellido, Nombre"</td></tr>
+<tr><td>288</td><td>Padrón</td><td>Estado de clave y marca Activo</td></tr>
+<tr><td>289</td><td>Padrón</td><td>Lista de domicilios con tipo, dirección, localidad, código postal y provincia</td></tr>
+<tr><td>290</td><td>Padrón</td><td>Domicilio fiscal resumido en una línea</td></tr>
+<tr><td>291</td><td>Padrón</td><td>"No existe persona" se informa como 404 y no como error</td></tr>
+<tr><td>292</td><td>Padrón</td><td>Caché de consultas con vencimiento configurable (PadronCacheHoras)</td></tr>
+<tr><td>293</td><td>Padrón</td><td>Caché negativa más corta (10 min) para CUIT inexistentes</td></tr>
+<tr><td>294</td><td>Padrón</td><td>Consultas simultáneas de la misma CUIT se unifican (single-flight)</td></tr>
+<tr><td>295</td><td>Padrón</td><td>Caché acotada en memoria</td></tr>
+<tr><td>296</td><td>Padrón</td><td>Padrón simulado en ModoSimulacion</td></tr>
+<tr><td>297</td><td>Padrón</td><td>El padrón simulado devuelve inactivas las CUIT terminadas en 0 para probar el caso</td></tr>
+<tr><td>298</td><td>Padrón</td><td>Endpoint GET /api/v1/contribuyentes/{cuit}</td></tr>
+<tr><td>299</td><td>Padrón</td><td>Validación de dígito verificador antes de consultar (400)</td></tr>
+<tr><td>300</td><td>Padrón</td><td>Endpoint POST /api/v1/contribuyentes/{cuit}/agenda: alta del receptor desde el padrón</td></tr>
+<tr><td>301</td><td>Padrón</td><td>El alta en agenda exige condicionIva válida (1..16)</td></tr>
+<tr><td>302</td><td>Padrón</td><td>El alta en agenda rechaza CUIT con clave inactiva (422)</td></tr>
+<tr><td>303</td><td>Padrón</td><td>El alta en agenda actualiza el receptor si ya existía (id cuit-NNN)</td></tr>
+<tr><td>304</td><td>Padrón</td><td>Alta en agenda requiere permiso emitir; la consulta, consultar</td></tr>
+<tr><td>305</td><td>Padrón</td><td>Cliente HTTP del padrón con los mismos proxy, timeout y anclaje TLS que WSFE</td></tr>
+<tr><td>306</td><td>Suscripciones</td><td>Fin de la facturación repetida del mismo período tras una caída</td></tr>
+<tr><td>307</td><td>Suscripciones</td><td>Cada ejecución emite como máximo un período por suscripción</td></tr>
+<tr><td>308</td><td>Suscripciones</td><td>Tope de períodos atrasados facturables solos (SuscripcionesMaxPeriodosAtrasados)</td></tr>
+<tr><td>309</td><td>Suscripciones</td><td>Suscripción retenida cuando hay más atrasos que el tope</td></tr>
+<tr><td>310</td><td>Suscripciones</td><td>Endpoint POST /suscripciones/{id}/confirmar-atrasos</td></tr>
+<tr><td>311</td><td>Suscripciones</td><td>Destrabado automático tras conflicto de idempotencia (resuelve el pendiente)</td></tr>
+<tr><td>312</td><td>Suscripciones</td><td>Detalle congelado antes de emitir (el reintento manda exactamente lo mismo)</td></tr>
+<tr><td>313</td><td>Suscripciones</td><td>Período en curso guardado para recuperarse después de un reinicio</td></tr>
+<tr><td>314</td><td>Suscripciones</td><td>FchServDesde/Hasta siempre del período facturado</td></tr>
+<tr><td>315</td><td>Suscripciones</td><td>Fecha del comprobante dentro de la ventana permitida por ARCA</td></tr>
+<tr><td>316</td><td>Suscripciones</td><td>Mensual anclada al día de inicio (sin corrimiento 31→28→28)</td></tr>
+<tr><td>317</td><td>Suscripciones</td><td>Quincenal fija en días 1 y 16</td></tr>
+<tr><td>318</td><td>Suscripciones</td><td>Respetan el modo mantenimiento</td></tr>
+<tr><td>319</td><td>Suscripciones</td><td>Consumen la cuota diaria del cliente</td></tr>
+<tr><td>320</td><td>Suscripciones</td><td>Ejecuciones concurrentes serializadas con lock</td></tr>
+<tr><td>321</td><td>Suscripciones</td><td>Alta, modificación y baja serializadas con la ejecución</td></tr>
+<tr><td>322</td><td>Suscripciones</td><td>Una suscripción con error no frena a las demás</td></tr>
+<tr><td>323</td><td>Suscripciones</td><td>Una suscripción corrupta en disco se omite y se cuenta</td></tr>
+<tr><td>324</td><td>Suscripciones</td><td>Máximo de suscripciones por cliente</td></tr>
+<tr><td>325</td><td>Suscripciones</td><td>El historial lo conserva el servicio, no el controlador</td></tr>
+<tr><td>326</td><td>Suscripciones</td><td>Servicio desechable (libera el semáforo)</td></tr>
+<tr><td>327</td><td>Datos</td><td>Prefijo de cliente por hash: "acme-1" y "acme1" ya no comparten archivos</td></tr>
+<tr><td>328</td><td>Datos</td><td>Mismo prefijo por hash en plantillas, receptores y suscripciones</td></tr>
+<tr><td>329</td><td>Datos</td><td>Listados tolerantes a archivos dañados</td></tr>
+<tr><td>330</td><td>Datos</td><td>Reemplazo de archivo con reintentos (antivirus o indexador en Windows)</td></tr>
+<tr><td>331</td><td>Datos</td><td>Registro SQLite tolerante a filas que no se pueden descifrar</td></tr>
+<tr><td>332</td><td>Datos</td><td>Registro JSON cuenta ilegibles y no se corta por clave de cifrado errónea</td></tr>
+<tr><td>333</td><td>Datos</td><td>Importación sólo de emisiones autorizadas con CAE, hash y número</td></tr>
+<tr><td>334</td><td>Datos</td><td>Importación rechaza pendientes (evita reenviar números a ARCA)</td></tr>
+<tr><td>335</td><td>Datos</td><td>En simulación el registro es en memoria: nunca se mezclan CAE ficticios con los reales</td></tr>
+<tr><td>336</td><td>Datos</td><td>En simulación se ignoran las rutas de receptores y suscripciones</td></tr>
+<tr><td>337</td><td>Auditoría</td><td>Ancla de la cadena de hashes en archivo aparte</td></tr>
+<tr><td>338</td><td>Auditoría</td><td>Detecta borrado de líneas al final del archivo</td></tr>
+<tr><td>339</td><td>Auditoría</td><td>Detecta borrado de archivos diarios completos</td></tr>
+<tr><td>340</td><td>Auditoría</td><td>La purga registra el hash de corte y la verificación encadena desde allí</td></tr>
+<tr><td>341</td><td>Auditoría</td><td>Total de eventos purgados conservado en el ancla</td></tr>
+<tr><td>342</td><td>Auditoría</td><td>Selección del archivo actual por fecha de escritura</td></tr>
+<tr><td>343</td><td>Auditoría</td><td>El escritor de auditoría sobrevive a cualquier excepción, no sólo de E/S</td></tr>
+<tr><td>344</td><td>Auditoría</td><td>Líneas dañadas toleradas al verificar y consultar</td></tr>
+<tr><td>345</td><td>Seguridad</td><td>Firma HMAC v2: cubre método, ruta y query además de cuerpo y hora</td></tr>
+<tr><td>346</td><td>Seguridad</td><td>Protección contra repetición de firmas (caché de firmas usadas)</td></tr>
+<tr><td>347</td><td>Seguridad</td><td>Lectura del cuerpo para firmar limitada a 1 MB</td></tr>
+<tr><td>348</td><td>Seguridad</td><td>Cliente .NET firma con v2 automáticamente</td></tr>
+<tr><td>349</td><td>Seguridad</td><td>Cliente PHP de ejemplo actualizado a la firma v2</td></tr>
+<tr><td>350</td><td>Seguridad</td><td>Rate limiting por cliente resuelto, no por la clave enviada (no se evade con claves inventadas)</td></tr>
+<tr><td>351</td><td>Seguridad</td><td>Rate limiting anónimo por IP, IPv6 agrupado por /64</td></tr>
+<tr><td>352</td><td>Seguridad</td><td>/metrics exige clave admin (salvo Api:MetricasPublicas=true)</td></tr>
+<tr><td>353</td><td>Seguridad</td><td>QR PNG e impresión HTML verifican que el comprobante sea del cliente</td></tr>
+<tr><td>354</td><td>Seguridad</td><td>El endpoint /qr también verifica la pertenencia</td></tr>
+<tr><td>355</td><td>Seguridad</td><td>Los administradores conservan acceso a todos los comprobantes</td></tr>
+<tr><td>356</td><td>Seguridad</td><td>Cuota: reserva atómica antes de emitir (sin carrera)</td></tr>
+<tr><td>357</td><td>Seguridad</td><td>Cuota: un lote reserva tantas unidades como comprobantes</td></tr>
+<tr><td>358</td><td>Seguridad</td><td>Cuota: se devuelven las unidades no usadas</td></tr>
+<tr><td>359</td><td>Seguridad</td><td>Cuota: las respuestas repetidas (idempotentes) no consumen</td></tr>
+<tr><td>360</td><td>Seguridad</td><td>Código de error CUOTA_AGOTADA</td></tr>
+<tr><td>361</td><td>Validación</td><td>Catálogo de tipos de documento completo (0 a 24, 30, 80, 86 a 96, 99)</td></tr>
+<tr><td>362</td><td>Reportes</td><td>El cierre diario resta las notas de crédito</td></tr>
+<tr><td>363</td><td>Impresión</td><td>Importe en letras con resguardo numérico para montos de más de 12 cifras</td></tr>
+<tr><td>364</td><td>Observabilidad</td><td>Etiquetas de métricas escapan saltos de línea</td></tr>
+<tr><td>365</td><td>Observabilidad</td><td>Gauge de pendientes recalculado como mucho cada 30 s</td></tr>
+<tr><td>366</td><td>Observabilidad</td><td>Gauges a prueba de reinicio del host: no rompen /metrics con un contenedor ya liberado</td></tr>
+<tr><td>367</td><td>Observabilidad</td><td>Un gauge defectuoso no tumba la exposición de métricas</td></tr>
+<tr><td>368</td><td>Calidad</td><td>Pruebas de MySQL contra MariaDB real (alta, upsert, baja, pendientes)</td></tr>
+<tr><td>369</td><td>Calidad</td><td>Prueba de cifrado y filas ilegibles en MySQL</td></tr>
+<tr><td>370</td><td>Calidad</td><td>Prueba de migración a MySQL sin pisar claves</td></tr>
+<tr><td>371</td><td>Calidad</td><td>Prueba de rechazo de nombre de tabla peligroso</td></tr>
+<tr><td>372</td><td>Calidad</td><td>Prueba de GET_LOCK entre dos instancias</td></tr>
+<tr><td>373</td><td>Calidad</td><td>Las pruebas de MySQL se omiten solas si no hay servidor (variable ARCA_TEST_MYSQL)</td></tr>
+<tr><td>374</td><td>Calidad</td><td>Pruebas de dígito verificador de CUIT</td></tr>
+<tr><td>375</td><td>Calidad</td><td>Prueba de parseo de getPersona</td></tr>
+<tr><td>376</td><td>Calidad</td><td>Prueba de denominación de persona física</td></tr>
+<tr><td>377</td><td>Calidad</td><td>Prueba de caché, single-flight y caché negativa del padrón</td></tr>
+<tr><td>378</td><td>Calidad</td><td>Prueba del padrón simulado</td></tr>
+<tr><td>379</td><td>Calidad</td><td>Prueba de API del padrón y alta en agenda</td></tr>
+<tr><td>380</td><td>Calidad</td><td>Prueba de 401 en el padrón sin clave</td></tr>
+<tr><td>381</td><td>Calidad</td><td>Prueba de prefijo de cliente sin colisiones</td></tr>
+<tr><td>382</td><td>Calidad</td><td>Prueba de importe gigante en letras</td></tr>
+<tr><td>383</td><td>Calidad</td><td>Prueba del catálogo de documentos</td></tr>
+<tr><td>384</td><td>Calidad</td><td>Prueba de agrupación IPv6</td></tr>
+<tr><td>385</td><td>Calidad</td><td>Prueba de reserva y devolución de cuota</td></tr>
+<tr><td>386</td><td>Calidad</td><td>Prueba de importación que rechaza pendientes</td></tr>
+<tr><td>387</td><td>Calidad</td><td>Prueba de firma v2</td></tr>
+<tr><td>388</td><td>Calidad</td><td>Prueba de purga y verificación de auditoría con ancla</td></tr>
+<tr><td>389</td><td>Calidad</td><td>Prueba de /metrics protegido</td></tr>
+<tr><td>390</td><td>Calidad</td><td>Contrato OpenAPI regenerado y verificado por prueba</td></tr>
+<tr><td>391</td><td>Calidad</td><td>275 pruebas en verde, build sin advertencias</td></tr>
+<tr><td>392</td><td>Documentación</td><td>OpenAPI JSON y YAML regenerados</td></tr>
+<tr><td>393</td><td>Documentación</td><td>Swagger estático regenerado</td></tr>
+<tr><td>394</td><td>Documentación</td><td>Colección Postman 1.4 con los endpoints nuevos</td></tr>
+<tr><td>395</td><td>Documentación</td><td>Guía de actualización a 1.4 con cambios incompatibles</td></tr>
+<tr><td>396</td><td>Documentación</td><td>Configuración de MySQL documentada</td></tr>
+<tr><td>397</td><td>Documentación</td><td>Changelog 1.4.1</td></tr>
+<tr><td>398</td><td>Documentación</td><td>README con MySQL y padrón</td></tr>
+<tr><td>399</td><td>Seguridad</td><td>Consulta de pertenencia de comprobante por cliente reutilizable (EsDelCliente)</td></tr>
+<tr><td>400</td><td>Calidad</td><td>Versión 1.4.1 en todos los ensamblados</td></tr>
+</table>
+
+<h3>Configuración nueva</h3>
+<table><tr><th>Clave</th><th>Defecto</th><th>Uso</th></tr>
+<tr><td><code>Arca:RegistroEmisionesMySql</code></td><td>vacío</td><td>Cadena de conexión MySQL/MariaDB, p. ej. <code>Server=db;Database=arca;User ID=arca;Password=…</code>. Tiene prioridad sobre SQLite y JSON.</td></tr>
+<tr><td><code>Arca:BloqueoDistribuidoMySql</code></td><td>true</td><td>Numeración con GET_LOCK entre servidores.</td></tr>
+<tr><td><code>Arca:MigrarRegistroAMySql</code></td><td>true</td><td>Copia SQLite/JSON a MySQL si la tabla está vacía.</td></tr>
+<tr><td><code>Arca:PadronUrl</code></td><td>Testing</td><td>Override de la URL de ws_sr_padron_a13.</td></tr>
+<tr><td><code>Arca:PadronCacheHoras</code></td><td>24</td><td>Vigencia de la caché del padrón.</td></tr>
+<tr><td><code>Arca:SuscripcionesMaxPeriodosAtrasados</code></td><td>1</td><td>Atrasos que una suscripción factura sola.</td></tr>
+<tr><td><code>Api:MetricasPublicas</code></td><td>false</td><td>Permite /metrics sin clave admin.</td></tr>
+</table>
+<p class="nota">El certificado debe estar asociado también al servicio <code>ws_sr_padron_a13</code> en ARCA para usar el padrón.</p>
+
+<h2 id="migracion14">25. Guía de actualización a 1.4 (cambios incompatibles)</h2>
+<ol>
+<li><b>Firma HMAC v2</b>: la cadena firmada pasa a ser <code>v2\n{tiempo}\n{MÉTODO}\n{ruta?query}\n{cuerpo}</code>. Actualizar los clientes propios; el cliente .NET y el ejemplo PHP ya firman con v2. Una misma firma no puede repetirse.</li>
+<li><b>/metrics</b> exige clave con permiso admin. Configurar Prometheus con la cabecera X-Api-Key o definir <code>Api:MetricasPublicas=true</code>.</li>
+<li><b>Prefijo de cliente</b>: plantillas, receptores y suscripciones usan un prefijo por hash del nombre del cliente. Los archivos creados con 1.3 quedan con el prefijo viejo: volver a darlos de alta (o renombrarlos) tras actualizar.</li>
+<li><b>Impresión y QR</b>: un cliente sólo puede ver los comprobantes que emitió (admin ve todos).</li>
+<li><b>Suscripciones</b>: con más atrasos que el tope quedan retenidas hasta <code>POST /suscripciones/{id}/confirmar-atrasos</code>.</li>
+<li><b>Cuotas</b>: el error de cuota agotada pasa a tener código <code>CUOTA_AGOTADA</code>.</li>
+<li>Para varios servidores: definir <code>Arca:RegistroEmisionesMySql</code> en todos, con la misma base. Al primer arranque se migra el registro local.</li>
+</ol>
+
+<h2 id="revision141">26. Revisión adversaria completa y correcciones (1.4.1)</h2>
+<p><span class="tag ok">352 / 352 OK</span> (antes 275). Revisión de todo el código en tres frentes (núcleo de emisión y persistencia; API y seguridad; reglas fiscales). Se verificaron 30 grupos de hallazgos y se corrigieron todos, con pruebas nuevas en RevisionNucleoTests, RevisionApiTests y RevisionFiscalTests. Las pruebas de MySQL se ejecutaron contra MariaDB.</p>
+<table><tr><th>#</th><th>Severidad</th><th>Área</th><th>Problema</th><th>Corrección</th></tr>
+<tr><td>1</td><td>Alta</td><td>Emisión</td><td>Dos claves podían tomar el mismo número si una quedaba pendiente (y una reconciliación podía asignar el CAE de otra clave)</td><td>Antes de numerar se resuelven en ARCA los pendientes del mismo PV/tipo; si no se puede, 503 sin llamar a FECAESolicitar. Una reconciliación no asigna un comprobante ya autorizado para otra clave.</td></tr>
+<tr><td>2</td><td>Alta</td><td>Emisión</td><td>Reconciliador y resolución manual sin bloqueo entre procesos (doble emisión con varios servidores o la CLI)</td><td>Toman el bloqueo distribuido/archivo; la CLI reconciliar respeta una antigüedad mínima segura.</td></tr>
+<tr><td>3</td><td>Alta</td><td>Persistencia</td><td>Migración JSON→SQLite ignoraba el cifrado y perdía pendientes</td><td>Descifra, cuenta ilegibles (MigracionIlegibles) y avisa.</td></tr>
+<tr><td>4</td><td>Alta</td><td>Seguridad</td><td>Un cliente podía emitir NC, NC parcial o duplicar sobre comprobantes de otro</td><td>Filtro [ComprobanteDelCliente] (404, sin consumir cuota; admin exento).</td></tr>
+<tr><td>5</td><td>Alta</td><td>Seguridad</td><td>Un cliente podía leer comprobantes de otro (por número y por rango)</td><td>Mismo filtro y rango filtrado por dueño, con índice en memoria.</td></tr>
+<tr><td>6</td><td>Media</td><td>Emisión</td><td>El 10016 sólo se buscaba en Errores (ARCA lo informa en Observaciones)</td><td>Se busca en ambos; el simulador lo devuelve como ARCA; renumeración efectiva.</td></tr>
+<tr><td>7</td><td>Media</td><td>Resiliencia</td><td>Cancelar la primera llamada compartida cancelaba a todos los que esperaban</td><td>La llamada compartida no usa el token del primero; cada uno espera con el suyo.</td></tr>
+<tr><td>8</td><td>Media</td><td>Idempotencia</td><td>Claves de distintos clientes podían colisionar usando ':'</td><td>Idempotency-Key con ':' se rechaza; largo total ≤ 191.</td></tr>
+<tr><td>9</td><td>Media</td><td>Idempotencia</td><td>La purga del registro reabría la idempotencia</td><td>La purga deja un registro compacto (número, CAE, QR) que sigue respondiendo.</td></tr>
+<tr><td>10</td><td>Media</td><td>Notas de crédito</td><td>NC parciales podían acreditar más que el total; anular dos veces</td><td>Control de saldo acumulado; anular se rechaza si ya hay NC.</td></tr>
+<tr><td>11</td><td>Media</td><td>Notas de crédito</td><td>La anulación copiaba opcionales no válidos en NC</td><td>Se descartan 2101, 2102 y 27; NC FCE con opcional 22.</td></tr>
+<tr><td>12</td><td>Media</td><td>Notas de crédito</td><td>Duplicar en moneda extranjera dejaba MonCotiz en 0</td><td>Consulta la cotización a ARCA.</td></tr>
+<tr><td>13</td><td>Media</td><td>Validación</td><td>Clase B aceptaba receptor RI/monotributista (RG 5616)</td><td>Rechazo local.</td></tr>
+<tr><td>14</td><td>Media</td><td>Validación</td><td>FCE sin opcional 27 (SCA/ADC)</td><td>Exigido.</td></tr>
+<tr><td>15</td><td>Media</td><td>Cálculo</td><td>Con IVA incluido, 100 daba total 99,99</td><td>Cálculo por bruto: total igual a lo cobrado.</td></tr>
+<tr><td>16</td><td>Media</td><td>Seguridad</td><td>Lotes cortados a mitad no descontaban cuota; devolución en otro día</td><td>Consumo contado ítem a ítem; devolución al día de la reserva.</td></tr>
+<tr><td>17</td><td>Media</td><td>Seguridad</td><td>/metrics y salud detallada no validaban vencimiento, IP ni firma</td><td>Validación completa compartida con el middleware; admite Bearer.</td></tr>
+<tr><td>18</td><td>Media</td><td>Seguridad</td><td>Detrás de un ingress: bloqueo por fuerza bruta de todos los clientes y listas de IP inútiles</td><td>Api:RedesConfiables (CIDR), aviso al arrancar, sin clave no cuenta como fallo.</td></tr>
+<tr><td>19</td><td>Media</td><td>Seguridad</td><td>Firma HMAC fallaba con ids con ':', espacios o prefijo de ruta</td><td>Se firma el destino crudo; SDK .NET y PHP firman lo que envían.</td></tr>
+<tr><td>20</td><td>Media</td><td>Operación</td><td>Una URL de webhook inválida detenía el servicio</td><td>Validación al iniciar y captura de errores en el envío; /admin/config no se rompe.</td></tr>
+<tr><td>21</td><td>Media</td><td>Despliegue</td><td>Plantillas/receptores/suscripciones en ruta de sólo lectura en contenedor</td><td>Rutas en /data en Dockerfile, compose y k8s.</td></tr>
+<tr><td>22</td><td>Baja</td><td>Emisión</td><td>Pendiente liberado entre lecturas se reenviaba con detalle viejo</td><td>Se reinicia el flujo completo.</td></tr>
+<tr><td>23</td><td>Baja</td><td>Persistencia</td><td>Filas ilegibles: excepciones en SQLite y null en MySQL (reabría la clave)</td><td>Error claro en ambos; plantillas y repositorios toleran archivos dañados.</td></tr>
+<tr><td>24</td><td>Baja</td><td>Resiliencia</td><td>El circuito semiabierto dejaba pasar todo</td><td>Una sola llamada de prueba.</td></tr>
+<tr><td>25</td><td>Baja</td><td>Validación</td><td>Clase M sin exigir CUIT; NC FCE asociando no FCE; tributos con &gt;2 decimales; ImpIVA sin detalle</td><td>Reglas agregadas.</td></tr>
+<tr><td>26</td><td>Baja</td><td>QR</td><td>Base64 sin escapar en la URL del QR</td><td>Escapado.</td></tr>
+<tr><td>27</td><td>Baja</td><td>Impresión</td><td>«SON PESOS UN» / «VEINTIUN» al final</td><td>UNO / VEINTIUNO al final; UN/VEINTIUN delante de MIL/MILLONES.</td></tr>
+<tr><td>28</td><td>Baja</td><td>Seguridad</td><td>Marca de tiempo fuera de rango daba 500; un acierto reiniciaba el contador de fuerza bruta; caché anti-repetición recorrida en cada solicitud</td><td>401; contador por ventana; limpieza periódica.</td></tr>
+<tr><td>29</td><td>Baja</td><td>Despliegue</td><td>Prometheus en k8s recibía 401</td><td>Scrape con credencial documentado (métricas siguen protegidas).</td></tr>
+<tr><td>30</td><td>Baja</td><td>Calidad</td><td>Prueba de auditoría intermitente por archivo compartido</td><td>Cada fábrica de pruebas usa su propio directorio.</td></tr>
+</table>
+<h3>Cambios de comportamiento a tener en cuenta</h3>
+<ul>
+<li>Mientras haya una emisión pendiente sin resolver en un PV/tipo, las nuevas emisiones de ese PV/tipo responden 503 hasta que el reconciliador o la resolución manual la liberen.</li>
+<li>La Idempotency-Key no admite «:».</li>
+<li>Nuevas validaciones locales: clase B con receptor RI/monotributista, FCE sin opcional 27, clase M sin CUIT, tributos con más de 2 decimales.</li>
+<li>Importe en letras: «SON PESOS UNO CON 00/100».</li>
+<li>Para Prometheus en k8s, configurar la credencial admin en el scrape.</li>
+</ul>
+<h3>Puntos a confirmar en homologación</h3>
+<ul>
+<li>Opcionales descartados en NC (2101, 2102, 27) y opcional 22 por defecto «N» en NC FCE.</li>
+<li>Rechazo de clase B con condiciones 13 y 16 contra FEParamGetCondicionIvaReceptor.</li>
+<li>El control de saldo de NC sólo ve NC emitidas por este servicio.</li>
+</ul>
+
+</main></body></html>
